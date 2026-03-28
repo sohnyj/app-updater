@@ -1,0 +1,50 @@
+{
+    "Environment": {
+        "Paths": {
+            "BaseDirectory": "%LOCALAPPDATA%\\mpv",
+            "UpdateDirectory": "%LOCALAPPDATA%\\mpv\\update",
+            "AppCacheDirectories": [
+                "%LOCALAPPDATA%\\mpv\\cache"
+            ]
+        },
+        "ZipExecutablePath": "%ProgramFiles%\\7-Zip\\7z.exe"
+    },
+    "UpdateRules": {
+        "VersionComparison": {
+            "IgnorePublishDate": false,
+            "OffsetMinutes": 60
+        },
+        "FileTypes": {
+            "Executable": [".exe"],
+            "Archive": [".7z", ".zip", ".tar.gz"]
+        },
+        "GlobalExcludeList": ["cache", "watch_later", "update.lnk"],
+        "ApiEndpoint": "https://api.github.com/repos/{0}/releases/latest"
+    },
+    "Apps": {
+        "mpv": {
+            "Executable": "mpv.exe",
+            "UpdateTargets": [
+                { "Pin": false, "Path": "sohnyj/minimal-mpv-winbuild", "Filter": "mpv-x86_64-znver3" }
+            ],
+            "DeployTargets": ["mpv", "mpv.com", "mpv.exe"]
+        },
+        "ffmpeg": {
+            "Executable": "ffmpeg.exe",
+            "UpdateTargets": [
+                { "Pin": false, "Path": "sohnyj/minimal-mpv-winbuild", "Filter": "ffmpeg-x86_64-znver3" }
+            ],
+            "DeployTargets": []
+        },
+        "yt-dlp": {
+            "Executable": "yt-dlp.exe",
+            "UpdateTargets": [
+                { "Pin": false, "Path": "yt-dlp/yt-dlp-nightly-builds", "Filter": "yt-dlp.exe" }
+            ],
+            "DeployTargets": []
+        }
+    },
+    "AppCacheClear": true,
+    "ErrorActionPreference": "Continue",
+    "ProgressPreference": "SilentlyContinue"
+}
