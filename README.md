@@ -9,7 +9,7 @@ The script is named `mpv_updater.ps1` as an example — it is intended to be cop
 ## Requirements
 
 - PowerShell 5.1 or later (built-in on Windows 10 and later)
-- [7-Zip](https://www.7-zip.org/) (`7z.exe`) — required for extracting archive assets
+- [7-Zip](https://www.7-zip.org/) (`7z.exe`), required for extracting archive assets
     - You don't necessarily need to install 7-Zip; having just `7z.exe` is sufficient.
 
 ## app-updater path
@@ -21,6 +21,8 @@ The script is named `mpv_updater.ps1` as an example — it is intended to be cop
 ## Note on BaseDirectory path
 
 This updater is designed for user-space directories such as `%LOCALAPPDATA%`. Installing to system-wide paths such as `%PROGRAMFILES%` requires running the script as administrator and is **strongly discouraged** — it bypasses UAC protections and risks unintended system-wide changes.
+
+## How it works
 
 On each run, `mpv_updater.ps1` performs the following steps. If the target executable does not exist locally, the date comparison is skipped and the latest release is downloaded and installed unconditionally — acting as an installer on first run.
 
@@ -66,11 +68,11 @@ Configuration file that controls updater behavior.
 | Key | Description |
 |-----|-------------|
 | `VersionComparison.IgnorePublishDate` | If `true`, skips date comparison and always updates |
-| `VersionComparison.OffsetMinutes` | Minutes added to the local file's `LastWriteTime` before comparing against the release publish date — update proceeds only if the release is newer than this adjusted time. Needed because binary build time and release publish time are not identical; for multi-architecture builds this gap can be significant, so adjust accordingly |
+| `VersionComparison.OffsetMinutes` | Minutes added to the local file's `LastWriteTime` before comparing against the release publish date — update proceeds only if the release is newer than this adjusted time. Needed because binary build time and release publish time are not identical. For multi-architecture builds this gap can be significant, so adjust accordingly |
 | `FileTypes.Executable` | File extensions treated as executables — deployed files of this type have their `LastWriteTime` overwritten with the release publish date, enabling accurate comparison on the next update run |
 | `FileTypes.Archive` | File extensions treated as archives — extracted files are deployed as-is, preserving their original `LastWriteTime` |
 | `GlobalExcludeList` | Files/folders to exempt from deletion during a full update — during deployment, all contents in `BaseDirectory` are deleted and replaced except for `UpdateDirectory` and items whose name contains any of the listed strings |
-| `ApiEndpoint` | GitHub Releases API endpoint (`{0}` is replaced with the `Path` value) — unauthenticated requests are subject to GitHub's rate limit of 60 requests per hour |
+| `ApiEndpoint` | GitHub Releases API endpoint (`{0}` is replaced with the `Path` value). Unauthenticated requests are subject to GitHub's rate limit of 60 requests per hour |
 
 ### `Apps`
 
@@ -108,7 +110,7 @@ Defines apps to update. Each app has the following fields.
 
 ## Example: multiple update sources
 
-Multiple repositories can be listed under `UpdateTargets` for the same app. The updater selects the most recently published asset across all sources.
+Multiple repositories can be listed under `UpdateTargets` for the same app. The updater selects the most recently published asset across all sources. Each app under `Apps` shares `BaseDirectory`.
 
 ```json
 "Apps": {
