@@ -25,14 +25,14 @@
         "mpv": {
             "Executable": "mpv.exe",
             "UpdateTargets": [
-                { "Pin": false, "Path": "sohnyj/minimal-mpv-winbuild", "Filter": "mpv-x86_64-znver3" }
+                { "Pin": false, "Path": "sohnyj/minimal-mpv-winbuild", "Filter": "mpv-x86_64-v3" }
             ],
             "DeployTargets": ["mpv", "mpv.com", "mpv.exe"]
         },
         "ffmpeg": {
             "Executable": "ffmpeg.exe",
             "UpdateTargets": [
-                { "Pin": false, "Path": "sohnyj/minimal-mpv-winbuild", "Filter": "ffmpeg-x86_64-znver3" }
+                { "Pin": false, "Path": "sohnyj/minimal-mpv-winbuild", "Filter": "ffmpeg-x86_64-v3" }
             ],
             "DeployTargets": []
         },
