@@ -1,44 +1,27 @@
 # app-updater
 
-app-updater that keeps any app up to date by tracking GitHub Releases. Target apps and repositories are fully configurable via `settings.json`.
+Lightweight app updater that tracks GitHub Releases. Target apps and repositories are configurable via `settings.json`.
 
-Designed to be lightweight with no external dependencies — relies entirely on built-in PowerShell features (`Invoke-WebRequest`, `Get-FileHash`, etc.) and 7-Zip for archive extraction. No package managers, runtimes, or third-party libraries required.
+No external dependencies — uses built-in PowerShell (`Invoke-WebRequest`, `Get-FileHash`, etc.) and 7-Zip for archive extraction.
 
-The script is named `mpv_updater.ps1` as an example — it is intended to be copied and renamed per app (e.g., `vscodium_updater.ps1`), each paired with its own `settings.json`.
+`mpv_updater.ps1` is an example name — copy and rename per app (e.g., `vscodium_updater.ps1`), each with its own `settings.json`.
 
 ## Requirements
 
-- PowerShell 5.1 or later (built-in on Windows 10 and later)
-- [7-Zip](https://www.7-zip.org/) (`7z.exe`), required for extracting archive assets
-    - You don't necessarily need to install 7-Zip; having just `7z.exe` is sufficient.
+- PowerShell 5.1+ (built-in on Windows 10+)
+- [7-Zip](https://www.7-zip.org/) (`7z.exe`) for archive extraction
+    - A standalone `7z.exe` is sufficient; installation is not required.
 
-## app-updater path
-- `%LOCALAPPDATA%\APPNAME\update`
-- Save the app-updater files to the path above.
-    - `update` folder is a temporary directory used for processing update files.
-    - `update` folder is excluded from cleanup logic in the `BaseDirectory`.
+## Installation
 
-## Note on BaseDirectory path
-
-This updater is designed for user-space directories such as `%LOCALAPPDATA%`. Installing to system-wide paths such as `%PROGRAMFILES%` requires running the script as administrator and is **strongly discouraged** — it bypasses UAC protections and risks unintended system-wide changes.
-
-## How it works
-
-On each run, `mpv_updater.ps1` performs the following steps. If the target executable does not exist locally, the date comparison is skipped and the latest release is downloaded and installed unconditionally — acting as an installer on first run.
-
-1. **Pre-flight** — checks that target processes are not running and required paths/tools exist
-2. **Remote discovery** — fetches the latest release metadata from each configured GitHub repository
-3. **Selection** — compares release publish dates against local file timestamps to determine what needs updating
-4. **Download** — downloads the selected release assets
-5. **Verification** — validates SHA256 hash of downloaded files against the `digest` field from the GitHub Releases API; proceeds with a warning if no hash is available, excludes the file if hash mismatches
-6. **Deploy** — extracts archives and copies files into the installation directory
-7. **Cleanup** — removes temporary download directories and optionally clears app cache
+1. Click **Code** > **Download ZIP**
+2. Extract to `%LOCALAPPDATA%\APPNAME\update`
 
 ## updater_shortcut.ps1
 
-Creates a `.lnk` shortcut (`update.lnk`) in `BaseDirectory` that launches `mpv_updater.ps1` directly via `powershell.exe -ExecutionPolicy Bypass`.
+Creates `update.lnk` in `BaseDirectory` to launch `mpv_updater.ps1` via `powershell.exe -ExecutionPolicy Bypass`.
 
-Run this once after initial setup. The shortcut is needed because Windows does not allow directly double-clicking a `.ps1` file to execute it — a shortcut with the appropriate execution policy bypasses this restriction and provides a convenient one-click entry point for running the updater.
+Run once after setup. Windows blocks direct `.ps1` execution by double-click — the shortcut bypasses this.
 
 **Usage:**
 
@@ -48,57 +31,76 @@ powershell.exe -ExecutionPolicy Bypass -File .\updater_shortcut.ps1
 
 Once `update.lnk` is created, double-click it to run the update process.
 
+## How it works
+
+On each run, `mpv_updater.ps1` performs the following steps. If the target executable does not exist locally, date comparison is skipped and the latest release is installed unconditionally (first-run install).
+
+1. **Pre-flight** — verifies target processes are not running and required paths/tools exist
+2. **Fetch metadata** — retrieves latest release info from configured GitHub repositories
+3. **Select targets** — compares release dates against local file timestamps
+4. **Download** — downloads selected release assets
+5. **Verify** — validates SHA256 hash against the GitHub `digest` field; warns if unavailable, excludes on mismatch
+6. **Deploy** — extracts archives and moves files into the installation directory
+7. **Cleanup** — removes temporary directories and optionally clears app cache
+
 ## settings.json
 
-Configuration file that controls updater behavior.
+Controls updater behavior.
 
-**Caution:** Choose paths carefully. On a full update, all contents in `BaseDirectory` are deleted and replaced except for `UpdateDirectory` and items matching `GlobalExcludeList`. `AppCacheDirectories` entries are also wiped when `AppCacheClear` is enabled. **Setting these to wrong directories may result in unintended data loss.**
+> [!CAUTION]
+> On a full update, all `BaseDirectory` contents are deleted except `UpdateDirectory` and `GlobalExcludeList` matches. `AppCacheDirectories` are also wiped when `AppCacheClear` is enabled. Incorrect paths may cause data loss.
 
 ### `Environment`
 
 | Key | Description |
 |-----|-------------|
-| `Paths.BaseDirectory` | Base path where apps are installed |
-| `Paths.UpdateDirectory` | Temporary path for downloaded update files — must be a subdirectory of `BaseDirectory` to be excluded from deletion during a full update |
-| `Paths.AppCacheDirectories` | Cache directories to clean after update — only the contents inside each directory are deleted, not the directories themselves |
-| `ZipExecutablePath` | Path to 7-Zip executable used for extraction |
+| `Paths.BaseDirectory` | App installation path |
+| `Paths.UpdateDirectory` | Temporary download path — must be under `BaseDirectory` to be excluded from full-update deletion |
+| `Paths.AppCacheDirectories` | Cache directories to clean after update (contents only, not the directories) |
+| `ZipExecutablePath` | Path to `7z.exe` |
+
+- app-updater path: `%LOCALAPPDATA%\APPNAME\update`
+    - The `update` folder is used for processing update files and excluded from `BaseDirectory` cleanup.
+
+> [!NOTE]
+> `BaseDirectory` is designed for user-space directories like `%LOCALAPPDATA%`. Using system-wide paths like `%PROGRAMFILES%` requires administrator privileges and is ***strongly discouraged*** — it bypasses UAC and risks unintended system-wide changes.
 
 ### `UpdateRules`
 
 | Key | Description |
 |-----|-------------|
-| `VersionComparison.IgnorePublishDate` | If `true`, skips date comparison and always updates |
-| `VersionComparison.OffsetMinutes` | Minutes added to the local file's `LastWriteTime` before comparing against the release publish date — update proceeds only if the release is newer than this adjusted time. Needed because binary build time and release publish time are not identical. For multi-architecture builds this gap can be significant, so adjust accordingly |
-| `FileTypes.Executable` | File extensions treated as executables — deployed files of this type have their `LastWriteTime` overwritten with the release publish date, enabling accurate comparison on the next update run |
-| `FileTypes.Archive` | File extensions treated as archives — extracted files are deployed as-is, preserving their original `LastWriteTime` |
-| `GlobalExcludeList` | Files/folders to exempt from deletion during a full update — during deployment, all contents in `BaseDirectory` are deleted and replaced except for `UpdateDirectory` and items whose name contains any of the listed strings |
-| `ApiEndpoint` | GitHub Releases API endpoint (`{0}` is replaced with the `Path` value). Unauthenticated requests are subject to GitHub's rate limit of 60 requests per hour |
+| `VersionComparison.IgnorePublishDate` | If `true`, always updates regardless of date |
+| `VersionComparison.OffsetMinutes` | Minutes added to local `LastWriteTime` before comparing with release date. Compensates for build-to-publish time gap |
+| `FileTypes.Executable` | `LastWriteTime` is overwritten with release date for future comparison |
+| `FileTypes.Archive` | Extracted files keep their original `LastWriteTime` |
+| `GlobalExcludeList` | Items excluded from deletion during full update (matched by name substring) |
+| `ApiEndpoint` | GitHub unauthenticated: 60 requests/hour rate limit |
 
 ### `Apps`
 
-Defines apps to update. Each app has the following fields.
+Defines apps to update.
 
 | Key | Description |
 |-----|-------------|
-| `Executable` | Executable name used to read `LastWriteTime` for update comparison |
-| `UpdateTargets` | List of repository/filter pairs used to search for release asset candidates |
-| `DeployTargets` | Filter list for selecting items to deploy from the extracted archive. Empty array deploys all contents |
+| `Executable` | Executable name used to read `LastWriteTime` for comparison |
+| `UpdateTargets` | Repository/filter pairs to match release assets |
+| `DeployTargets` | Filter for items to deploy from extracted archive. Empty = deploy all |
 
 ### `UpdateTargets`
 
 | Key | Description |
 |-----|-------------|
-| `Pin` | If `true`, this target is preferred over others in the same app when selecting the latest candidate |
+| `Pin` | If `true`, preferred over other targets in the same app |
 | `Path` | GitHub repository path (`owner/repo`) |
-| `Filter` | String to match against release asset names |
+| `Filter` | Substring to match against release asset names |
 
 #### Misc options
 
 | Key | Description |
 |-----|-------------|
-| `AppCacheClear` | If `true`, deletes `AppCacheDirectories` after update — only runs on a full update; skipped when only a partial set of apps is updated |
-| `ErrorActionPreference` | PowerShell error handling behavior (`Continue` / `Stop`, etc.) |
-| `ProgressPreference` | PowerShell progress bar visibility (`SilentlyContinue` to suppress) |
+| `AppCacheClear` | If `true`, clears `AppCacheDirectories` on full update only |
+| `ErrorActionPreference` | PowerShell error handling (`Continue` / `Stop`, etc.) |
+| `ProgressPreference` | Progress bar visibility (`SilentlyContinue` to suppress) |
 
 ### Default settings
 
@@ -110,7 +112,7 @@ Defines apps to update. Each app has the following fields.
 
 ## Example: multiple update sources
 
-Multiple repositories can be listed under `UpdateTargets` for the same app. The updater selects the most recently published asset across all sources. Each app under `Apps` shares `BaseDirectory`.
+Multiple repositories can be listed under `UpdateTargets` for the same app. The updater selects the most recent asset across all sources.
 
 ```json
 "Apps": {
@@ -143,11 +145,11 @@ Multiple repositories can be listed under `UpdateTargets` for the same app. The 
 }
 ```
 
-To pin a specific source, set `"Pin": true` on the desired target. When any target in the group is pinned, the pinned one takes priority over the latest-by-date selection.
+Set `"Pin": true` to prefer a specific source over latest-by-date selection.
 
 ## Example: VSCodium
 
-The updater is not limited to media tools. Any app distributed via GitHub Releases can be tracked. The following configuration manages VSCodium as a standalone portable installation.
+Any app distributed via GitHub Releases can be tracked. Example: VSCodium as a portable installation and update.
 
 ```json
 {
