@@ -29,7 +29,7 @@ Windows blocks direct `.ps1` execution by double-click — the shortcut bypasses
 powershell.exe -ExecutionPolicy Bypass -File .\updater_shortcut.ps1
 ```
 
-Once `update.lnk` is created, double-click it to run the update process.
+Run once to create `update.lnk`, then double-click it to run the updater.
 
 ## How it works
 
@@ -45,8 +45,6 @@ On each run, `mpv_updater.ps1` performs the following steps. If the target execu
 
 ## settings.json
 
-Controls updater behavior.
-
 > [!CAUTION]
 > On a full update, all `BaseDirectory` contents are deleted except `UpdateDirectory` and `GlobalExcludeList` matches. `AppCacheDirectories` are also wiped when `AppCacheClear` is enabled. ***Incorrect paths may cause data loss.***
 
@@ -55,12 +53,9 @@ Controls updater behavior.
 | Key | Description |
 |-----|-------------|
 | `Paths.BaseDirectory` | App installation path |
-| `Paths.UpdateDirectory` | Temporary download path — must be under `BaseDirectory` to be excluded from full-update deletion |
+| `Paths.UpdateDirectory` | Update script and temp path — must be under `BaseDirectory` to be excluded from full-update deletion |
 | `Paths.AppCacheDirectories` | Cache directories to clean after update (contents only, not the directories) |
 | `ZipExecutablePath` | Path to `7z.exe` |
-
-- app-updater path: `%LOCALAPPDATA%\APPNAME\update`
-    - The `update` folder is used for processing update files and excluded from `BaseDirectory` cleanup.
 
 > [!NOTE]
 > `BaseDirectory` is designed for user-space directories like `%LOCALAPPDATA%`. Using system-wide paths like `%PROGRAMFILES%` requires administrator privileges and is ***strongly discouraged*** — it bypasses UAC and risks unintended system-wide changes.
@@ -70,15 +65,13 @@ Controls updater behavior.
 | Key | Description |
 |-----|-------------|
 | `VersionComparison.IgnorePublishDate` | If `true`, always updates regardless of date |
-| `VersionComparison.OffsetMinutes` | Minutes added to local `LastWriteTime` before comparing with release date. Compensates for build-to-publish time gap |
+| `VersionComparison.OffsetMinutes` | Minutes added to local `LastWriteTime`. Compensates for build-to-publish time gap |
 | `FileTypes.Executable` | `LastWriteTime` is overwritten with release date for future comparison |
 | `FileTypes.Archive` | Extracted files keep their original `LastWriteTime` |
 | `GlobalExcludeList` | Items excluded from deletion during full update (matched by name substring) |
 | `ApiEndpoint` | GitHub unauthenticated: 60 requests/hour rate limit |
 
 ### `Apps`
-
-Defines apps to update.
 
 | Key | Description |
 |-----|-------------|
@@ -94,7 +87,7 @@ Defines apps to update.
 | `Path` | GitHub repository path (`owner/repo`) |
 | `Filter` | Substring to match against release asset names |
 
-#### Misc options
+### Misc options
 
 | Key | Description |
 |-----|-------------|
