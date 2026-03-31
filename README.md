@@ -21,7 +21,7 @@ No external dependencies — uses built-in PowerShell (`Invoke-WebRequest`, `Get
 
 Creates `update.lnk` in `BaseDirectory` to launch `mpv_updater.ps1` via `powershell.exe -ExecutionPolicy Bypass`.
 
-Run once after setup. Windows blocks direct `.ps1` execution by double-click — the shortcut bypasses this.
+Windows blocks direct `.ps1` execution by double-click — the shortcut bypasses this.
 
 **Usage:**
 
@@ -48,7 +48,7 @@ On each run, `mpv_updater.ps1` performs the following steps. If the target execu
 Controls updater behavior.
 
 > [!CAUTION]
-> On a full update, all `BaseDirectory` contents are deleted except `UpdateDirectory` and `GlobalExcludeList` matches. `AppCacheDirectories` are also wiped when `AppCacheClear` is enabled. Incorrect paths may cause data loss.
+> On a full update, all `BaseDirectory` contents are deleted except `UpdateDirectory` and `GlobalExcludeList` matches. `AppCacheDirectories` are also wiped when `AppCacheClear` is enabled. ***Incorrect paths may cause data loss.***
 
 ### `Environment`
 
