@@ -1,50 +1,38 @@
 # ==============================================================================
-# SECTION 1. CONFIGURATION & ENVIRONMENT
+# SECTION 1. Configuration & Environment
 # ==============================================================================
 
-# [Configuration Loading] Load settings.json and ui_templates.json
-$SettingsFilePath = Join-Path -Path $PSScriptRoot -ChildPath "settings.json"
-if (-not (Test-Path -Path $SettingsFilePath -PathType Leaf)) {
-    Write-Host " [X] Not found: $SettingsFilePath" -ForegroundColor Red
-    Read-Host
-    exit 1
-}
-try {
-    $Settings = Get-Content -Path $SettingsFilePath -Raw | ConvertFrom-Json
-} catch {
-    Write-Host " [X] Failed to parse: $SettingsFilePath" -ForegroundColor Red
-    Write-Host "     $($_.Exception.Message)" -ForegroundColor Red
-    Read-Host
-    exit 1
-}
-$UiTemplateFilePath = Join-Path -Path $PSScriptRoot -ChildPath "ui_templates.json"
-if (-not (Test-Path -Path $UiTemplateFilePath -PathType Leaf)) {
-    Write-Host " [X] Not found: $UiTemplateFilePath" -ForegroundColor Red
-    Read-Host
-    exit 1
-}
-try {
-    $UiTemplates = Get-Content -Path $UiTemplateFilePath -Raw | ConvertFrom-Json
-} catch {
-    Write-Host " [X] Failed to parse: $UiTemplateFilePath" -ForegroundColor Red
-    Write-Host "     $($_.Exception.Message)" -ForegroundColor Red
-    Read-Host
-    exit 1
-}
+function Import-JsonFile {
+    param ([Parameter(Mandatory)] [string]$FilePath)
 
-# [Path Resolution] Expand OS environment variables (%AppData% etc.) to runtime physical paths
+    if (-not (Test-Path -Path $FilePath -PathType Leaf)) {
+        Write-Host " [X] Not found: $FilePath" -ForegroundColor Red
+        Read-Host
+        exit 1
+    }
+    try {
+        return Get-Content -Path $FilePath -Raw | ConvertFrom-Json
+    } catch {
+        Write-Host " [X] Failed to parse: $FilePath" -ForegroundColor Red
+        Write-Host "     $($_.Exception.Message)" -ForegroundColor Red
+        Read-Host
+        exit 1
+    }
+}
+$Settings = Import-JsonFile -FilePath (Join-Path -Path $PSScriptRoot -ChildPath "settings.json")
+$UiTemplates = Import-JsonFile -FilePath (Join-Path -Path $PSScriptRoot -ChildPath "ui_templates.json")
+
 $Apps = $Settings.Apps
 $BaseDirectory = [Environment]::ExpandEnvironmentVariables($Settings.Environment.Paths.BaseDirectory)
 $UpdateDirectory = [Environment]::ExpandEnvironmentVariables($Settings.Environment.Paths.UpdateDirectory)
 $AppCacheDirectories = @($Settings.Environment.Paths.AppCacheDirectories) | ForEach-Object { [Environment]::ExpandEnvironmentVariables($_) }
 $ZipExecutablePath = [Environment]::ExpandEnvironmentVariables($Settings.Environment.ZipExecutablePath)
 
-# [Runtime Preference] Apply session control policies based on user custom settings
 $ErrorActionPreference = $Settings.ErrorActionPreference
 $ProgressPreference = $Settings.ProgressPreference
 
 # ==============================================================================
-# SECTION 2. FUNCTIONAL COMPONENTS
+# SECTION 2. Functions
 # ==============================================================================
 
 function Write-UiMessage {
@@ -74,6 +62,28 @@ function Exit-WithMessage {
     exit
 }
 
+function Test-IsExcludedItem {
+    param ([Parameter(Mandatory)] [string]$ItemName)
+
+    foreach ($Pattern in $Settings.UpdateRules.GlobalExcludeList) {
+        if ($ItemName -like "*$Pattern*") { return $true }
+    }
+    return $false
+}
+
+function Test-RequiredPath {
+    param (
+        [Parameter(Mandatory)] [string]$Path,
+        [Parameter(Mandatory)] [string]$PathType,
+        [Parameter(Mandatory)] [string]$UiKey
+    )
+
+    if (-not (Test-Path -Path $Path -PathType $PathType)) {
+        Write-UiMessage -UiKey $UiKey -FormatArgs @($Path)
+        Exit-WithMessage
+    }
+}
+
 function Test-RunningProcesses {
     $Processes = Get-Process
     $RunningProcesses = @(foreach ($AppName in $Apps.PSObject.Properties.Name) {
@@ -98,27 +108,6 @@ function Test-RunningProcesses {
             Stop-Process -Id $RunningProcess.Process.Id -Force
         }
         Write-UiMessage -UiKey "ProceedUpdate"
-    }
-}
-
-function Test-BaseDirectory {
-    if (-not (Test-Path -Path $BaseDirectory -PathType Container)) {
-        Write-UiMessage -UiKey "NoBaseDir" -FormatArgs @($BaseDirectory)
-        Exit-WithMessage
-    }
-}
-
-function Test-UpdateDirectory {
-    if (-not (Test-Path -Path $UpdateDirectory -PathType Container)) {
-        Write-UiMessage -UiKey "NoUpdateDir" -FormatArgs @($UpdateDirectory)
-        Exit-WithMessage
-    }
-}
-
-function Test-ZipExecutable {
-    if (-not (Test-Path -Path $ZipExecutablePath -PathType Leaf)) {
-        Write-UiMessage -UiKey "NoZip" -FormatArgs @($ZipExecutablePath)
-        Exit-WithMessage
     }
 }
 
@@ -174,15 +163,12 @@ function Select-LatestBuildCandidates {
 
     if ($null -eq $ReleaseMetadata -or $ReleaseMetadata.Count -eq 0) { return @() }
     $FileExtensions = $Settings.UpdateRules.FileTypes.Executable + $Settings.UpdateRules.FileTypes.Archive
+    $ExtensionPattern = ($FileExtensions | ForEach-Object { [Regex]::Escape($_) }) -join '|'
     $Candidates = foreach ($UpdateTarget in @($UpdateTargets)) {
         $MatchedBuilds = @($ReleaseMetadata) | Where-Object {
-            $IsTargetFile = $false
-            if ($_.RepoPath -eq $UpdateTarget.Path -and $_.TargetFileName -like "*$($UpdateTarget.Filter)*") {
-                foreach ($Extension in $FileExtensions) {
-                    if ($_.TargetFileName -like "*$Extension") { $IsTargetFile = $true; break }
-                }
-            }
-            $IsTargetFile
+            $_.RepoPath -eq $UpdateTarget.Path -and
+            $_.TargetFileName -like "*$($UpdateTarget.Filter)*" -and
+            $_.TargetFileName -match "($ExtensionPattern)$"
         }
         if ($MatchedBuilds.Count -eq 0) {
             Write-UiMessage -UiKey "BuildNotFound" -FormatArgs @($UpdateTarget.Path, $UpdateTarget.Filter)
@@ -305,21 +291,12 @@ function Expand-ArchiveFile {
     return ($LASTEXITCODE -eq 0)
 }
 
-# ------------------------------------------------------------------------------
-# [Sub-Section 3] Deployment Strategy & Clean-up
-# ------------------------------------------------------------------------------
 
 function Remove-PreviousInstallation {
     Write-UiMessage -UiKey "Step51PreDeploy" -FormatArgs @($BaseDirectory)
     $CurrentItems = @(Get-ChildItem -Path $BaseDirectory)
     foreach ($CurrentItem in $CurrentItems) {
-        $IsExcludedItem = $CurrentItem.FullName -eq $UpdateDirectory
-        if (-not $IsExcludedItem) {
-            foreach ($ExcludeList in $Settings.UpdateRules.GlobalExcludeList) {
-                if ($CurrentItem.Name -like "*$ExcludeList*") { $IsExcludedItem = $true; break }
-            }
-        }
-        if ($IsExcludedItem) {
+        if ($CurrentItem.FullName -eq $UpdateDirectory -or (Test-IsExcludedItem -ItemName $CurrentItem.Name)) {
             Write-UiMessage -UiKey "SkipExclude" -FormatArgs @($CurrentItem.Name); continue
         }
         Remove-Item -Path $CurrentItem.FullName -Recurse -Force
@@ -362,11 +339,7 @@ function Install-ExtractedContents {
         @(Get-ChildItem -Path $SearchDirectory) | Where-Object { $_.Name -ne $FileName }
     }
     foreach ($DeployItem in $DeployItems) {
-        $IsExcludedFromDeploy = $false
-        foreach ($ExcludeList in $Settings.UpdateRules.GlobalExcludeList) {
-            if ($DeployItem.Name -like "*$ExcludeList*") { $IsExcludedFromDeploy = $true; break }
-        }
-        if ($IsExcludedFromDeploy) {
+        if (Test-IsExcludedItem -ItemName $DeployItem.Name) {
             Write-UiMessage -UiKey "SkipExclude" -FormatArgs @($DeployItem.Name)
             continue
         }
@@ -445,21 +418,16 @@ function Clear-AppCache {
 }
 
 # ==============================================================================
-# SECTION 3. MAIN RUNTIME ORCHESTRATION
-# Phase 0 -> 1 -> 2 -> 3 -> 4 -> 5 Sequential Dependency
+# SECTION 3. Main
 # ==============================================================================
 
-# ------------------------------------------------------------------------------
-# [PHASE 0] Pre-Flight
-# ------------------------------------------------------------------------------
+# [Phase 0] Pre-Flight
 Test-RunningProcesses
-Test-BaseDirectory
-Test-UpdateDirectory
-Test-ZipExecutable
+Test-RequiredPath -Path $BaseDirectory -PathType Container -UiKey "NoBaseDir"
+Test-RequiredPath -Path $UpdateDirectory -PathType Container -UiKey "NoUpdateDir"
+Test-RequiredPath -Path $ZipExecutablePath -PathType Leaf -UiKey "NoZip"
 
-# ------------------------------------------------------------------------------
-# [PHASE 1] Flattening Update Targets
-# ------------------------------------------------------------------------------
+# [Phase 1] Flatten Update Targets
 $UpdateTargets = @(foreach ($AppProperty in $Apps.PSObject.Properties) {
     foreach ($UpdateTarget in $AppProperty.Value.UpdateTargets) {
         [PSCustomObject]@{
@@ -471,9 +439,7 @@ $UpdateTargets = @(foreach ($AppProperty in $Apps.PSObject.Properties) {
     }
 })
 
-# ------------------------------------------------------------------------------
-# [PHASE 2] Remote Discovery
-# ------------------------------------------------------------------------------
+# [Phase 2] Fetch Release Metadata
 Write-UiMessage -UiKey "Step1MetaData"
 $ReleaseMetadata = Get-ReleaseMetadata -UpdateTargets $UpdateTargets
 if ($ReleaseMetadata.Count -eq 0) { Exit-WithMessage -UiKey "NoMetaData" }
@@ -482,17 +448,13 @@ $ReleaseMetadata | Select-Object -Property RepoPath, PublishedAt -Unique | ForEa
     Write-UiMessage -UiKey "FetchItem" -FormatArgs @($_.RepoPath, $_.PublishedAt)
 }
 
-# ------------------------------------------------------------------------------
-# [PHASE 3] Analytical Selection
-# ------------------------------------------------------------------------------
+# [Phase 3] Select Update Targets
 Write-UiMessage -UiKey "Step2Comparison"
 $Candidates = Select-LatestBuildCandidates -ReleaseMetadata $ReleaseMetadata -UpdateTargets $UpdateTargets
 $BuildChoices = Select-UpdateTargets -Candidates $Candidates
 if ($BuildChoices.Count -eq 0) { Exit-WithMessage -UiKey "NoUpdateRequired" }
 
-# ------------------------------------------------------------------------------
-# [PHASE 4] Transactional Lifecycle Execution
-# ------------------------------------------------------------------------------
+# [Phase 4] Download, Verify & Deploy
 Write-UiMessage -UiKey "Step3Download"
 $DownloadTasks = Invoke-FileDownload -BuildChoices $BuildChoices
 $SuccessfulDownloads = @($DownloadTasks | Where-Object { $_.IsSuccess })
@@ -517,7 +479,5 @@ if ($SuccessfulDownloads.Count -gt 0) {
     Write-UiMessage -UiKey "DownloadAllFail"
 }
 
-# ------------------------------------------------------------------------------
-# [PHASE 5] Exit
-# ------------------------------------------------------------------------------
+# [Phase 5] Exit
 Exit-WithMessage
