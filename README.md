@@ -46,7 +46,7 @@ On each run, `mpv_updater.ps1` performs the following steps. If the target execu
 ## settings.json
 
 > [!CAUTION]
-> On a full update, all `BaseDirectory` contents are deleted except `UpdateDirectory` and `GlobalExcludeList` matches. `AppCacheDirectories` are also wiped when `AppCacheClear` is enabled. ***Incorrect paths may cause data loss.***
+> On a full update, all `BaseDirectory` contents are deleted except `UpdateDirectory` and `ExcludeList` matches. `AppCacheDirectories` are also wiped when `AppCache.Clear` is enabled. ***Incorrect paths may cause data loss.***
 
 ### `Environment`
 
