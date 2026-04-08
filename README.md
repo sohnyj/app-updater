@@ -60,15 +60,15 @@ On each run, `mpv_updater.ps1` performs the following steps. If the target execu
 > [!NOTE]
 > `BaseDirectory` is designed for user-space directories like `%LOCALAPPDATA%`. Using system-wide paths like `%PROGRAMFILES%` requires administrator privileges and is ***strongly discouraged*** — it bypasses UAC and risks unintended system-wide changes.
 
-### `UpdateRules`
+### `GlobalUpdateRules`
 
 | Key | Description |
 |-----|-------------|
-| `VersionComparison.IgnorePublishDate` | If `true`, always updates regardless of date |
+| `VersionComparison.ForceUpdate` | If `true`, always updates regardless of date |
 | `VersionComparison.OffsetMinutes` | Minutes added to local `LastWriteTime`. Compensates for build-to-publish time gap |
 | `FileTypes.Executable` | `LastWriteTime` is overwritten with release date for future comparison |
 | `FileTypes.Archive` | Extracted files keep their original `LastWriteTime` |
-| `GlobalExcludeList` | Items excluded from deletion during full update (matched by name substring) |
+| `ExcludeList` | Items excluded from deletion during full update (matched by name substring) |
 | `ApiEndpoint` | GitHub unauthenticated: 60 requests/hour rate limit |
 
 ### `Apps`
@@ -84,6 +84,7 @@ On each run, `mpv_updater.ps1` performs the following steps. If the target execu
 | Key | Description |
 |-----|-------------|
 | `Pin` | If `true`, preferred over other targets in the same app |
+| `Force` | If `true`, always updates this target regardless of date |
 | `Path` | GitHub repository path (`owner/repo`) |
 | `Filter` | Substring to match against release asset names |
 
@@ -91,7 +92,8 @@ On each run, `mpv_updater.ps1` performs the following steps. If the target execu
 
 | Key | Description |
 |-----|-------------|
-| `AppCacheClear` | If `true`, clears `AppCacheDirectories` on full update only |
+| `AppCache.Clear` | If `true`, clears `AppCacheDirectories` on full update |
+| `AppCache.ForceOnPartial` | If `true`, also clears cache on partial updates |
 | `ErrorActionPreference` | PowerShell error handling (`Continue` / `Stop`, etc.) |
 | `ProgressPreference` | Progress bar visibility (`SilentlyContinue` to suppress) |
 
@@ -112,33 +114,33 @@ Multiple repositories can be listed under `UpdateTargets` for the same app. The 
     "mpv": {
         "Executable": "mpv.exe",
         "UpdateTargets": [
-            { "Pin": false, "Path": "shinchiro/mpv-winbuild-cmake", "Filter": "mpv-x86_64-v3" },
-            { "Pin": false, "Path": "zhongfly/mpv-winbuild",        "Filter": "mpv-x86_64-v3" },
-            { "Pin": false, "Path": "sohnyj/minimal-mpv-winbuild",  "Filter": "mpv-x86_64-znver3" }
+            { "Pin": false, "Force": false, "Path": "shinchiro/mpv-winbuild-cmake", "Filter": "mpv-x86_64-v3" },
+            { "Pin": false, "Force": false, "Path": "zhongfly/mpv-winbuild",        "Filter": "mpv-x86_64-v3" },
+            { "Pin": false, "Force": false, "Path": "sohnyj/minimal-mpv-winbuild",  "Filter": "mpv-x86_64-znver3" }
         ],
         "DeployTargets": ["mpv", "mpv.com", "mpv.exe"]
     },
     "ffmpeg": {
         "Executable": "ffmpeg.exe",
         "UpdateTargets": [
-            { "Pin": false, "Path": "shinchiro/mpv-winbuild-cmake", "Filter": "ffmpeg-x86_64-v3" },
-            { "Pin": false, "Path": "zhongfly/mpv-winbuild",        "Filter": "ffmpeg-x86_64-v3" },
-            { "Pin": false, "Path": "sohnyj/minimal-mpv-winbuild",  "Filter": "ffmpeg-x86_64-znver3" }
+            { "Pin": false, "Force": false, "Path": "shinchiro/mpv-winbuild-cmake", "Filter": "ffmpeg-x86_64-v3" },
+            { "Pin": false, "Force": false, "Path": "zhongfly/mpv-winbuild",        "Filter": "ffmpeg-x86_64-v3" },
+            { "Pin": false, "Force": false, "Path": "sohnyj/minimal-mpv-winbuild",  "Filter": "ffmpeg-x86_64-znver3" }
         ],
         "DeployTargets": []
     },
     "yt-dlp": {
         "Executable": "yt-dlp.exe",
         "UpdateTargets": [
-            { "Pin": false, "Path": "yt-dlp/yt-dlp",                "Filter": "yt-dlp.exe" },
-            { "Pin": false, "Path": "yt-dlp/yt-dlp-nightly-builds", "Filter": "yt-dlp.exe" }
+            { "Pin": false, "Force": false, "Path": "yt-dlp/yt-dlp",                "Filter": "yt-dlp.exe" },
+            { "Pin": false, "Force": false, "Path": "yt-dlp/yt-dlp-nightly-builds", "Filter": "yt-dlp.exe" }
         ],
         "DeployTargets": []
     }
 }
 ```
 
-Set `"Pin": true` to prefer a specific source over latest-by-date selection.
+Set `"Pin": true` to prefer a specific source over latest-by-date selection. Set `"Force": true` on a target to always update it regardless of date.
 
 ## Example: VSCodium
 
@@ -158,28 +160,31 @@ Any app distributed via GitHub Releases can be tracked. Example: VSCodium as a p
         },
         "ZipExecutablePath": "%ProgramFiles%\\7-Zip\\7z.exe"
     },
-    "UpdateRules": {
+    "GlobalUpdateRules": {
         "VersionComparison": {
-            "IgnorePublishDate": false,
+            "ForceUpdate": false,
             "OffsetMinutes": 60
         },
         "FileTypes": {
             "Executable": [".exe"],
             "Archive": [".7z", ".zip", ".tar.gz"]
         },
-        "GlobalExcludeList": ["update.lnk"],
+        "ExcludeList": ["update.lnk"],
         "ApiEndpoint": "https://api.github.com/repos/{0}/releases/latest"
     },
     "Apps": {
         "vscodium": {
             "Executable": "vscodium.exe",
             "UpdateTargets": [
-                { "Pin": false, "Path": "VSCodium/vscodium", "Filter": "VSCodium-win32-x64" }
+                { "Pin": false, "Force": false, "Path": "VSCodium/vscodium", "Filter": "VSCodium-win32-x64" }
             ],
             "DeployTargets": []
         }
     },
-    "AppCacheClear": true,
+    "AppCache": {
+        "Clear": true,
+        "ForceOnPartial": false
+    },
     "ErrorActionPreference": "Continue",
     "ProgressPreference": "SilentlyContinue"
 }
