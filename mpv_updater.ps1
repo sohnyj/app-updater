@@ -126,7 +126,7 @@ function Get-ReleaseMetadata {
             foreach ($Asset in $ApiResponse.assets) {
                 [PSCustomObject]@{
                     RepoPath       = $RepositoryPath
-                    PublishedAt    = [DateTime]::Parse($ApiResponse.published_at, [System.Globalization.CultureInfo]::InvariantCulture).ToString("yyyy-MM-dd HH:mm:ss")
+                    PublishedAt    = [DateTime]::Parse($ApiResponse.published_at, [System.Globalization.CultureInfo]::InvariantCulture)
                     TargetFileName = $Asset.name
                     DownloadUrl    = $Asset.browser_download_url
                     Sha256Hash     = $Asset.digest
@@ -201,17 +201,17 @@ function Select-UpdateTargets {
         $LocalFileTime = Get-LocalBuildTimestamp -Category $Candidate.Category
         $ShouldApply = $LocalFileTime -eq [DateTime]::MinValue -or
                        $GlobalForceUpdate -or $Candidate.Force -or
-                       [DateTime]::Parse($Candidate.PublishedAt) -gt $LocalFileTime
+                       $Candidate.PublishedAt -gt $LocalFileTime
         if ($ShouldApply) {
             Write-UiMessage -UiKey "FilterList" -FormatArgs @($Candidate.Category, $Candidate.RepoPath) -NoNewline
         } else {
-            Write-UiMessage -UiKey "NoNewBuild" -FormatArgs @($Candidate.RepoPath, $Candidate.PublishedAt) -NoNewline
+            Write-UiMessage -UiKey "NoNewBuild" -FormatArgs @($Candidate.RepoPath, $Candidate.PublishedAt.ToString("yyyy-MM-dd HH:mm:ss")) -NoNewline
         }
         if ($Candidate.Pin) { Write-UiMessage -UiKey "PinTag" -NoNewline }
         if ($Candidate.Force) { Write-UiMessage -UiKey "ForceTag" -NoNewline }
         Write-UiMessage -UiKey "Newline"
         if ($ShouldApply) {
-            Write-UiMessage -UiKey "FilterItem" -FormatArgs @($Candidate.TargetFileName, $Candidate.PublishedAt)
+            Write-UiMessage -UiKey "FilterItem" -FormatArgs @($Candidate.TargetFileName, $Candidate.PublishedAt.ToString("yyyy-MM-dd HH:mm:ss"))
             $Candidate
         }
     }
@@ -308,8 +308,7 @@ function Install-SingleExecutable {
 
     $DeployItem = Split-Path -Path $SourcePath -Leaf
     $DestinationPath = Join-Path -Path $BaseDirectory -ChildPath $DeployItem
-    if (Test-Path -Path $DestinationPath -PathType Leaf) { Remove-Item -Path $DestinationPath -Force }
-    Move-Item -Path $SourcePath -Destination $BaseDirectory -Force
+    Move-Item -Path $SourcePath -Destination $DestinationPath -Force
     Write-UiMessage -UiKey "Moved" -FormatArgs @($DeployItem)
     (Get-Item -Path $DestinationPath).LastWriteTime = $Timestamp
     Write-UiMessage -UiKey "TimestampSync" -FormatArgs @($Timestamp.ToString("yyyy-MM-dd HH:mm:ss"))
@@ -375,7 +374,7 @@ function Invoke-AppUpdate {
         $TargetFilters = $Apps.($VerifiedTask.Info.Category).DeployTargets
         if ($FileCategory -eq "Executable") {
             Write-UiMessage -UiKey "ApplyList" -FormatArgs @("File", $VerifiedTask.FileName)
-            Install-SingleExecutable -SourcePath $VerifiedTask.Path -Timestamp ([DateTime]::Parse($VerifiedTask.Info.PublishedAt))
+            Install-SingleExecutable -SourcePath $VerifiedTask.Path -Timestamp $VerifiedTask.Info.PublishedAt
         } elseif ($FileCategory -eq "Archive") {
             Write-UiMessage -UiKey "ApplyList" -FormatArgs @("Archive", $VerifiedTask.FileName)
             if (Expand-ArchiveFile -FilePath $VerifiedTask.Path) {
@@ -392,8 +391,8 @@ function Remove-TemporaryDirectories {
     param ([Array]$DownloadTasks)
 
     if ($null -eq $DownloadTasks) { return }
-    foreach ($DownloadTask in $DownloadTasks) {
-        $DirectoryToRemove = Split-Path -Path $DownloadTask.Path -Parent
+    $UniqueDirectories = @($DownloadTasks | ForEach-Object { Split-Path -Path $_.Path -Parent } | Select-Object -Unique)
+    foreach ($DirectoryToRemove in $UniqueDirectories) {
         if (Test-Path -Path $DirectoryToRemove -PathType Container) {
             Remove-Item -Path $DirectoryToRemove -Recurse -Force
             Write-UiMessage -UiKey "RemoveTempDir" -FormatArgs @(Split-Path -Path $DirectoryToRemove -Leaf)
@@ -443,7 +442,7 @@ $ReleaseMetadata = Get-ReleaseMetadata -UpdateTargets $UpdateTargets
 if ($ReleaseMetadata.Count -eq 0) { Exit-WithMessage -UiKey "NoMetaData" }
 Write-UiMessage -UiKey "FetchList"
 $ReleaseMetadata | Select-Object -Property RepoPath, PublishedAt -Unique | ForEach-Object {
-    Write-UiMessage -UiKey "FetchItem" -FormatArgs @($_.RepoPath, $_.PublishedAt)
+    Write-UiMessage -UiKey "FetchItem" -FormatArgs @($_.RepoPath, $_.PublishedAt.ToString("yyyy-MM-dd HH:mm:ss"))
 }
 
 # [Phase 3] Select Update Targets
