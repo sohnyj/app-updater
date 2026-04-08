@@ -48,6 +48,7 @@
     "CacheClearDir"      : { "Template": "     [C] Cleared App cache: {0}", "Color": "DarkYellow" },
     "Newline"            : { "Template": "", "Color": "Gray" },
     "PinTag"             : { "Template": " [PIN]", "Color": "Blue" },
+    "ForceTag"           : { "Template": " [FORCE]", "Color": "Magenta" },
     "StatusOk"           : { "Template": " [OK]", "Color": "Green" },
     "StatusFail"         : { "Template": " [FAIL]", "Color": "Red" },
     "HashNA"             : { "Template": "[NA]", "Color": "DarkYellow" },

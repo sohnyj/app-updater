@@ -65,7 +65,7 @@ function Exit-WithMessage {
 function Test-IsExcludedItem {
     param ([Parameter(Mandatory)] [string]$ItemName)
 
-    foreach ($Pattern in $Settings.UpdateRules.GlobalExcludeList) {
+    foreach ($Pattern in $Settings.GlobalUpdateRules.ExcludeList) {
         if ($ItemName -like "*$Pattern*") { return $true }
     }
     return $false
@@ -117,7 +117,7 @@ function Get-ReleaseMetadata {
     $UniqueRepositoryPaths = @($UpdateTargets.Path) | Select-Object -Unique
     $ReleaseMetadata = @(foreach ($RepositoryPath in $UniqueRepositoryPaths) {
         try {
-            $ApiEndpointUri = $Settings.UpdateRules.ApiEndpoint -f $RepositoryPath
+            $ApiEndpointUri = $Settings.GlobalUpdateRules.ApiEndpoint -f $RepositoryPath
             $ApiResponse = Invoke-RestMethod -Uri $ApiEndpointUri -Method Get -TimeoutSec 15
             if ($null -eq $ApiResponse.assets) { continue }
             foreach ($Asset in $ApiResponse.assets) {
@@ -150,7 +150,7 @@ function Get-LocalBuildTimestamp {
     $LocalFilePath = Join-Path -Path $BaseDirectory -ChildPath $Apps.$Category.Executable
     if (Test-Path -Path $LocalFilePath -PathType Leaf) {
         $LastWriteTime = (Get-Item -Path $LocalFilePath).LastWriteTime
-        return $LastWriteTime.AddMinutes($Settings.UpdateRules.VersionComparison.OffsetMinutes)
+        return $LastWriteTime.AddMinutes($Settings.GlobalUpdateRules.VersionComparison.OffsetMinutes)
     }
     return [DateTime]::MinValue
 }
@@ -162,7 +162,7 @@ function Select-LatestBuildCandidates {
     )
 
     if ($null -eq $ReleaseMetadata -or $ReleaseMetadata.Count -eq 0) { return @() }
-    $FileExtensions = $Settings.UpdateRules.FileTypes.Executable + $Settings.UpdateRules.FileTypes.Archive
+    $FileExtensions = $Settings.GlobalUpdateRules.FileTypes.Executable + $Settings.GlobalUpdateRules.FileTypes.Archive
     $ExtensionPattern = ($FileExtensions | ForEach-Object { [Regex]::Escape($_) }) -join '|'
     $Candidates = foreach ($UpdateTarget in @($UpdateTargets)) {
         $MatchedBuilds = @($ReleaseMetadata) | Where-Object {
@@ -177,11 +177,12 @@ function Select-LatestBuildCandidates {
             $Candidate = $MatchedBuild | Select-Object -Property *
             $Candidate | Add-Member -NotePropertyName "Category" -NotePropertyValue $UpdateTarget.Category -Force
             $Candidate | Add-Member -NotePropertyName "Pin" -NotePropertyValue $UpdateTarget.Pin -Force
+            $Candidate | Add-Member -NotePropertyName "Force" -NotePropertyValue $UpdateTarget.Force -Force
             $Candidate
         }
     }
     return @($Candidates | Group-Object -Property Category | ForEach-Object {
-        $Pinned = @($_.Group | Where-Object { $_.Pin -eq $true })
+        $Pinned = @($_.Group | Where-Object { $_.Pin })
         if ($Pinned.Count -gt 0) {
             $Pinned | Sort-Object -Property PublishedAt -Descending | Select-Object -First 1
         } else {
@@ -195,26 +196,29 @@ function Select-UpdateTargets {
         [Parameter(Mandatory)] [array]$Candidates
     )
 
+    $GlobalForceUpdate = $Settings.GlobalUpdateRules.VersionComparison.ForceUpdate -eq $true
     $FinalSelection = foreach ($Candidate in $Candidates) {
         $LocalFileTime = Get-LocalBuildTimestamp -Category $Candidate.Category
         $ExecutablePath = Join-Path -Path $BaseDirectory -ChildPath $Apps.($Candidate.Category).Executable
-        $IgnoreDate = $Settings.UpdateRules.VersionComparison.IgnorePublishDate
         $ShouldApply = $false
         if (-not (Test-Path -Path $ExecutablePath -PathType Leaf)) {
             $ShouldApply = $true
-        } elseif ($IgnoreDate) {
+        } elseif ($GlobalForceUpdate -or $Candidate.Force) {
             $ShouldApply = $true
         } elseif ([DateTime]::Parse($Candidate.PublishedAt) -gt $LocalFileTime) {
             $ShouldApply = $true
         }
         if ($ShouldApply) {
             Write-UiMessage -UiKey "FilterList" -FormatArgs @($Candidate.Category, $Candidate.RepoPath) -NoNewline
-            if ($Candidate.Pin) { Write-UiMessage -UiKey "PinTag" } else { Write-UiMessage -UiKey "Newline" }
-            Write-UiMessage -UiKey "FilterItem" -FormatArgs @($Candidate.TargetFileName, $Candidate.PublishedAt)
-            $Candidate
         } else {
             Write-UiMessage -UiKey "NoNewBuild" -FormatArgs @($Candidate.RepoPath, $Candidate.PublishedAt) -NoNewline
-            if ($Candidate.Pin) { Write-UiMessage -UiKey "PinTag" } else { Write-UiMessage -UiKey "Newline" }
+        }
+        if ($Candidate.Pin) { Write-UiMessage -UiKey "PinTag" -NoNewline }
+        if ($Candidate.Force) { Write-UiMessage -UiKey "ForceTag" -NoNewline }
+        Write-UiMessage -UiKey "Newline"
+        if ($ShouldApply) {
+            Write-UiMessage -UiKey "FilterItem" -FormatArgs @($Candidate.TargetFileName, $Candidate.PublishedAt)
+            $Candidate
         }
     }
     return @($FinalSelection)
@@ -275,10 +279,10 @@ function Test-FileIntegrity {
 function Get-FileCategory {
     param ([Parameter(Mandatory)] [string]$FileName)
 
-    foreach ($Extension in $Settings.UpdateRules.FileTypes.Executable) {
+    foreach ($Extension in $Settings.GlobalUpdateRules.FileTypes.Executable) {
         if ($FileName -like "*$Extension") { return "Executable" }
     }
-    foreach ($Extension in $Settings.UpdateRules.FileTypes.Archive) {
+    foreach ($Extension in $Settings.GlobalUpdateRules.FileTypes.Archive) {
         if ($FileName -like "*$Extension") { return "Archive" }
     }
 }
@@ -407,8 +411,8 @@ function Remove-TemporaryDirectories {
 function Clear-AppCache {
     param ([Parameter(Mandatory)] [bool]$IsFullUpdate)
 
-    if ($Settings.AppCacheClear -ne $true) { Write-UiMessage -UiKey "CacheClearOff"; return }
-    if (-not $IsFullUpdate) { Write-UiMessage -UiKey "CacheClearSkip"; return }
+    if ($Settings.AppCache.Clear -ne $true) { Write-UiMessage -UiKey "CacheClearOff"; return }
+    if (-not $IsFullUpdate -and $Settings.AppCache.ForceOnPartial -ne $true) { Write-UiMessage -UiKey "CacheClearSkip"; return }
     foreach ($AppCacheDirectory in $AppCacheDirectories) {
         if (Test-Path -Path $AppCacheDirectory -PathType Container) {
             Get-ChildItem -Path $AppCacheDirectory | Remove-Item -Recurse -Force
@@ -431,10 +435,11 @@ Test-RequiredPath -Path $ZipExecutablePath -PathType Leaf -UiKey "NoZip"
 $UpdateTargets = @(foreach ($AppProperty in $Apps.PSObject.Properties) {
     foreach ($UpdateTarget in $AppProperty.Value.UpdateTargets) {
         [PSCustomObject]@{
-            Pin      = $UpdateTarget.Pin
+            Pin      = $UpdateTarget.Pin -eq $true
             Path     = $UpdateTarget.Path
             Category = $AppProperty.Name
             Filter   = $UpdateTarget.Filter
+            Force    = $UpdateTarget.Force -eq $true
         }
     }
 })
