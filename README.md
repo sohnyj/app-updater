@@ -15,7 +15,7 @@ No external dependencies — uses built-in PowerShell (`Invoke-WebRequest`, `Get
 ## Installation
 
 1. Click **Code** > **Download ZIP**
-2. Extract to `%LOCALAPPDATA%\APPNAME\update`
+2. Extract to `%LOCALAPPDATA%\{APPNAME}\update`
 
 ## updater_shortcut.ps1
 
