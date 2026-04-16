@@ -183,11 +183,8 @@ function Select-LatestBuildCandidates {
     }
     return @($Candidates | Group-Object -Property Category | ForEach-Object {
         $Pinned = @($_.Group | Where-Object { $_.Pin })
-        if ($Pinned.Count -gt 0) {
-            $Pinned | Sort-Object -Property PublishedAt -Descending | Select-Object -First 1
-        } else {
-            $_.Group | Sort-Object -Property PublishedAt -Descending | Select-Object -First 1
-        }
+        $SortSource = if ($Pinned.Count -gt 0) { $Pinned } else { $_.Group }
+        $SortSource | Sort-Object -Property PublishedAt -Descending | Select-Object -First 1
     })
 }
 
@@ -202,16 +199,17 @@ function Select-UpdateTargets {
         $ShouldApply = $LocalFileTime -eq [DateTime]::MinValue -or
                        $GlobalForceUpdate -or $Candidate.Force -or
                        $Candidate.PublishedAt -gt $LocalFileTime
+        $PublishedAtText = $Candidate.PublishedAt.ToString("yyyy-MM-dd HH:mm:ss")
         if ($ShouldApply) {
             Write-UiMessage -UiKey "FilterList" -FormatArgs @($Candidate.Category, $Candidate.RepoPath) -NoNewline
         } else {
-            Write-UiMessage -UiKey "NoNewBuild" -FormatArgs @($Candidate.RepoPath, $Candidate.PublishedAt.ToString("yyyy-MM-dd HH:mm:ss")) -NoNewline
+            Write-UiMessage -UiKey "NoNewBuild" -FormatArgs @($Candidate.RepoPath, $PublishedAtText) -NoNewline
         }
         if ($Candidate.Pin) { Write-UiMessage -UiKey "PinTag" -NoNewline }
         if ($Candidate.Force) { Write-UiMessage -UiKey "ForceTag" -NoNewline }
         Write-UiMessage -UiKey "Newline"
         if ($ShouldApply) {
-            Write-UiMessage -UiKey "FilterItem" -FormatArgs @($Candidate.TargetFileName, $Candidate.PublishedAt.ToString("yyyy-MM-dd HH:mm:ss"))
+            Write-UiMessage -UiKey "FilterItem" -FormatArgs @($Candidate.TargetFileName, $PublishedAtText)
             $Candidate
         }
     }
@@ -273,11 +271,10 @@ function Test-FileIntegrity {
 function Get-FileCategory {
     param ([Parameter(Mandatory)] [string]$FileName)
 
-    foreach ($Extension in $GlobalUpdateRules.FileTypes.Executable) {
-        if ($FileName -like "*$Extension") { return "Executable" }
-    }
-    foreach ($Extension in $GlobalUpdateRules.FileTypes.Archive) {
-        if ($FileName -like "*$Extension") { return "Archive" }
+    foreach ($Category in "Executable", "Archive") {
+        foreach ($Extension in $GlobalUpdateRules.FileTypes.$Category) {
+            if ($FileName -like "*$Extension") { return $Category }
+        }
     }
 }
 
@@ -404,7 +401,10 @@ function Clear-AppCache {
     param ([Parameter(Mandatory)] [bool]$IsFullUpdate)
 
     if ($Settings.AppCache.Clear -ne $true) { Write-UiMessage -UiKey "CacheClearOff"; return }
-    if (-not $IsFullUpdate -and $Settings.AppCache.ForceOnPartial -ne $true) { Write-UiMessage -UiKey "CacheClearSkip"; return }
+    if (-not $IsFullUpdate) {
+        if ($Settings.AppCache.ForceOnPartial -ne $true) { Write-UiMessage -UiKey "CacheClearSkip"; return }
+        Write-UiMessage -UiKey "CacheClearForce"
+    }
     foreach ($AppCacheDirectory in $AppCacheDirectories) {
         if (Test-Path -Path $AppCacheDirectory -PathType Container) {
             Get-ChildItem -Path $AppCacheDirectory | Remove-Item -Recurse -Force
