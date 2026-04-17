@@ -87,11 +87,10 @@ function Test-RequiredPath {
     }
 }
 
-function Test-RunningProcesses {
-    $Processes = Get-Process
+function Test-RunningProcess {
     $RunningProcesses = @(foreach ($AppName in $Apps.PSObject.Properties.Name) {
         $ExecutableName = [System.IO.Path]::GetFileNameWithoutExtension($Apps.$AppName.Executable)
-        foreach ($Process in @($Processes | Where-Object { $_.Name -eq $ExecutableName })) {
+        foreach ($Process in @(Get-Process -Name $ExecutableName -ErrorAction SilentlyContinue)) {
             [PSCustomObject]@{ AppName = $AppName; Process = $Process }
         }
     })
@@ -158,7 +157,7 @@ function Get-LocalBuildTimestamp {
     return [DateTime]::MinValue
 }
 
-function Select-LatestBuildCandidates {
+function Select-LatestBuildCandidate {
     param (
         [Parameter(Mandatory)] [array]$ReleaseMetadata,
         [Parameter(Mandatory)] [array]$UpdateTargets
@@ -188,7 +187,7 @@ function Select-LatestBuildCandidates {
     })
 }
 
-function Select-UpdateTargets {
+function Select-UpdateTarget {
     param (
         [Parameter(Mandatory)] [array]$Candidates
     )
@@ -251,7 +250,7 @@ function Test-FileIntegrity {
 
     $VerifiedTasks = foreach ($DownloadTask in (@($DownloadTasks) | Where-Object { $_.IsSuccess })) {
         Write-UiMessage -UiKey "VerifyFileList" -FormatArgs @($DownloadTask.FileName)
-        $CalculatedFileHash = "sha256:$((Get-FileHash $DownloadTask.Path -Algorithm SHA256).Hash.ToLower())"
+        $CalculatedFileHash = "sha256:$((Get-FileHash -Path $DownloadTask.Path -Algorithm SHA256).Hash.ToLower())"
         Write-UiMessage -UiKey "VerifyFileItem" -FormatArgs @($CalculatedFileHash) -NoNewline
         $IsHashMatched = if ([string]::IsNullOrEmpty($DownloadTask.ExpectedHash)) {
             Write-UiMessage -UiKey "HashNA"
@@ -288,7 +287,7 @@ function Expand-ArchiveFile {
 
 function Remove-PreviousInstallation {
     Write-UiMessage -UiKey "Step51PreDeploy" -FormatArgs @($BaseDirectory)
-    $CurrentItems = @(Get-ChildItem -Path $BaseDirectory)
+    $CurrentItems = @(Get-ChildItem -Path $BaseDirectory -Force)
     foreach ($CurrentItem in $CurrentItems) {
         if ($CurrentItem.FullName -eq $UpdateDirectory -or (Test-IsExcludedItem -ItemName $CurrentItem.Name)) {
             Write-UiMessage -UiKey "SkipExclude" -FormatArgs @($CurrentItem.Name); continue
@@ -350,9 +349,9 @@ function Install-ExtractedContents {
 }
 
 function Invoke-AppUpdate {
+    [OutputType([bool])]
     param ([Parameter(Mandatory)] [array]$VerifiedTasks)
 
-    if ($VerifiedTasks.Count -eq 0) { Write-UiMessage -UiKey "NoUpdateRequired"; return }
     $ExistingExecutableCount = 0
     foreach ($CategoryName in $Apps.PSObject.Properties.Name) {
         $ExecutablePath = Join-Path -Path $BaseDirectory -ChildPath $Apps.$CategoryName.Executable
@@ -418,7 +417,7 @@ function Clear-AppCache {
 # ==============================================================================
 
 # [Phase 0] Pre-Flight
-Test-RunningProcesses
+Test-RunningProcess
 Test-RequiredPath -Path $BaseDirectory -PathType Container -UiKey "NoBaseDir"
 Test-RequiredPath -Path $UpdateDirectory -PathType Container -UiKey "NoUpdateDir"
 Test-RequiredPath -Path $ZipExecutablePath -PathType Leaf -UiKey "NoZip"
@@ -447,8 +446,8 @@ $ReleaseMetadata | Select-Object -Property RepoPath, PublishedAt -Unique | ForEa
 
 # [Phase 3] Select Update Targets
 Write-UiMessage -UiKey "Step2Comparison"
-$Candidates = Select-LatestBuildCandidates -ReleaseMetadata $ReleaseMetadata -UpdateTargets $UpdateTargets
-$BuildChoices = Select-UpdateTargets -Candidates $Candidates
+$Candidates = Select-LatestBuildCandidate -ReleaseMetadata $ReleaseMetadata -UpdateTargets $UpdateTargets
+$BuildChoices = Select-UpdateTarget -Candidates $Candidates
 if ($BuildChoices.Count -eq 0) { Exit-WithMessage -UiKey "NoUpdateRequired" }
 
 # [Phase 4] Download, Verify & Deploy
