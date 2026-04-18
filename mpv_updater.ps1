@@ -198,17 +198,16 @@ function Select-UpdateTarget {
         $ShouldApply = $LocalFileTime -eq [DateTime]::MinValue -or
                        $GlobalForceUpdate -or $Candidate.Force -or
                        $Candidate.PublishedAt -gt $LocalFileTime
-        $PublishedAtText = $Candidate.PublishedAt.ToString("yyyy-MM-dd HH:mm:ss")
         if ($ShouldApply) {
             Write-UiMessage -UiKey "FilterList" -FormatArgs @($Candidate.Category, $Candidate.RepoPath) -NoNewline
         } else {
-            Write-UiMessage -UiKey "NoNewBuild" -FormatArgs @($Candidate.RepoPath, $PublishedAtText) -NoNewline
+            Write-UiMessage -UiKey "NoNewBuild" -FormatArgs @($Candidate.RepoPath, $Candidate.PublishedAt.ToString("yyyy-MM-dd HH:mm:ss")) -NoNewline
         }
         if ($Candidate.Pin) { Write-UiMessage -UiKey "PinTag" -NoNewline }
         if ($Candidate.Force) { Write-UiMessage -UiKey "ForceTag" -NoNewline }
         Write-UiMessage -UiKey "Newline"
         if ($ShouldApply) {
-            Write-UiMessage -UiKey "FilterItem" -FormatArgs @($Candidate.TargetFileName, $PublishedAtText)
+            Write-UiMessage -UiKey "FilterItem" -FormatArgs @($Candidate.TargetFileName, $Candidate.PublishedAt.ToString("yyyy-MM-dd HH:mm:ss"))
             $Candidate
         }
     }
