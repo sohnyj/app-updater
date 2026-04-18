@@ -310,7 +310,7 @@ function Install-SingleExecutable {
     Write-UiMessage -UiKey "TimestampSync" -FormatArgs @($Timestamp.ToString("yyyy-MM-dd HH:mm:ss"))
 }
 
-function Install-ExtractedContents {
+function Install-ExtractedContent {
     param (
         [Parameter(Mandatory)] [string]$SourceDirectory,
         [array]$FilterList,
@@ -374,7 +374,7 @@ function Invoke-AppUpdate {
         } elseif ($FileCategory -eq "Archive") {
             Write-UiMessage -UiKey "ApplyList" -FormatArgs @("Archive", $VerifiedTask.FileName)
             if (Expand-ArchiveFile -FilePath $VerifiedTask.Path) {
-                Install-ExtractedContents -SourceDirectory (Split-Path -Path $VerifiedTask.Path) -FilterList $TargetFilters -FileName $VerifiedTask.FileName
+                Install-ExtractedContent -SourceDirectory (Split-Path -Path $VerifiedTask.Path) -FilterList $TargetFilters -FileName $VerifiedTask.FileName
             } else {
                 Write-UiMessage -UiKey "ExtractFail" -FormatArgs @($VerifiedTask.FileName)
             }
@@ -383,7 +383,7 @@ function Invoke-AppUpdate {
     return $IsFullUpdate
 }
 
-function Remove-TemporaryDirectories {
+function Remove-TemporaryDirectory {
     param ([Array]$DownloadTasks)
 
     if ($null -eq $DownloadTasks) { return }
@@ -463,7 +463,7 @@ if ($VerifiedTasks.Count -gt 0) {
     Write-UiMessage -UiKey "NoVerifiedBuilds"
 }
 Write-UiMessage -UiKey "Step6TempClear"
-Remove-TemporaryDirectories -DownloadTasks $DownloadTasks
+Remove-TemporaryDirectory -DownloadTasks $DownloadTasks
 if ($VerifiedTasks.Count -gt 0) {
     Write-UiMessage -UiKey "Step7CacheClear"
     Clear-AppCache -IsFullUpdate $IsFullUpdate
