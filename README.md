@@ -77,7 +77,7 @@ On each run, `mpv_updater.ps1` performs the following steps. If the target execu
 |-----|-------------|
 | `Executable` | Executable name used to read `LastWriteTime` for comparison |
 | `UpdateTargets` | Repository/filter pairs to match release assets |
-| `DeployTargets` | Filter for items to deploy from extracted archive. Empty = deploy all |
+| `DeployFilters` | Filter for items to deploy from extracted archive. Empty = deploy all |
 
 ### `UpdateTargets`
 
@@ -118,7 +118,7 @@ Multiple repositories can be listed under `UpdateTargets` for the same app. The 
             { "Pin": false, "Force": false, "Path": "zhongfly/mpv-winbuild",        "Filter": "mpv-x86_64-v3" },
             { "Pin": false, "Force": false, "Path": "sohnyj/minimal-mpv-winbuild",  "Filter": "mpv-x86_64-znver3" }
         ],
-        "DeployTargets": ["mpv", "mpv.com", "mpv.exe"]
+        "DeployFilters": ["mpv", "mpv.com", "mpv.exe"]
     },
     "ffmpeg": {
         "Executable": "ffmpeg.exe",
@@ -127,7 +127,7 @@ Multiple repositories can be listed under `UpdateTargets` for the same app. The 
             { "Pin": false, "Force": false, "Path": "zhongfly/mpv-winbuild",        "Filter": "ffmpeg-x86_64-v3" },
             { "Pin": false, "Force": false, "Path": "sohnyj/minimal-mpv-winbuild",  "Filter": "ffmpeg-x86_64-znver3" }
         ],
-        "DeployTargets": []
+        "DeployFilters": []
     },
     "yt-dlp": {
         "Executable": "yt-dlp.exe",
@@ -135,7 +135,7 @@ Multiple repositories can be listed under `UpdateTargets` for the same app. The 
             { "Pin": false, "Force": false, "Path": "yt-dlp/yt-dlp",                "Filter": "yt-dlp.exe" },
             { "Pin": false, "Force": false, "Path": "yt-dlp/yt-dlp-nightly-builds", "Filter": "yt-dlp.exe" }
         ],
-        "DeployTargets": []
+        "DeployFilters": []
     }
 }
 ```
@@ -178,7 +178,7 @@ Any app distributed via GitHub Releases can be tracked. Example: VSCodium as a p
             "UpdateTargets": [
                 { "Pin": false, "Force": false, "Path": "VSCodium/vscodium", "Filter": "VSCodium-win32-x64" }
             ],
-            "DeployTargets": []
+            "DeployFilters": []
         }
     },
     "AppCache": {
