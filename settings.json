@@ -27,21 +27,21 @@
             "UpdateTargets": [
                 { "Pin": false, "Force": false, "Path": "sohnyj/minimal-mpv-winbuild", "Filter": "mpv-x86_64-v3" }
             ],
-            "DeployTargets": ["mpv", "mpv.com", "mpv.exe"]
+            "DeployFilters": ["mpv", "mpv.com", "mpv.exe"]
         },
         "ffmpeg": {
             "Executable": "ffmpeg.exe",
             "UpdateTargets": [
                 { "Pin": false, "Force": false, "Path": "sohnyj/minimal-mpv-winbuild", "Filter": "ffmpeg-x86_64-v3" }
             ],
-            "DeployTargets": []
+            "DeployFilters": []
         },
         "yt-dlp": {
             "Executable": "yt-dlp.exe",
             "UpdateTargets": [
                 { "Pin": false, "Force": false, "Path": "yt-dlp/yt-dlp-nightly-builds", "Filter": "yt-dlp.exe" }
             ],
-            "DeployTargets": []
+            "DeployFilters": []
         }
     },
     "AppCache": {
