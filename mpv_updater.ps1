@@ -7,7 +7,7 @@ function Import-JsonFile {
 
     if (-not (Test-Path -Path $FilePath -PathType Leaf)) {
         Write-Host " [X] Not found: $FilePath" -ForegroundColor Red
-        Read-Host
+        $null = Read-Host
         exit 1
     }
     try {
@@ -15,10 +15,11 @@ function Import-JsonFile {
     } catch {
         Write-Host " [X] Failed to parse: $FilePath" -ForegroundColor Red
         Write-Host "     $($_.Exception.Message)" -ForegroundColor Red
-        Read-Host
+        $null = Read-Host
         exit 1
     }
 }
+
 $Settings = Import-JsonFile -FilePath (Join-Path -Path $PSScriptRoot -ChildPath "settings.json")
 $UiTemplates = Import-JsonFile -FilePath (Join-Path -Path $PSScriptRoot -ChildPath "ui_templates.json")
 
@@ -26,7 +27,8 @@ $Apps = $Settings.Apps
 $GlobalUpdateRules = $Settings.GlobalUpdateRules
 $BaseDirectory = [Environment]::ExpandEnvironmentVariables($Settings.Environment.Paths.BaseDirectory)
 $UpdateDirectory = [Environment]::ExpandEnvironmentVariables($Settings.Environment.Paths.UpdateDirectory)
-$AppCacheDirectories = @($Settings.Environment.Paths.AppCacheDirectories) | ForEach-Object { [Environment]::ExpandEnvironmentVariables($_) }
+$AppCacheDirectories = @($Settings.Environment.Paths.AppCacheDirectories) |
+    ForEach-Object { [Environment]::ExpandEnvironmentVariables($_) }
 $ZipExecutablePath = [Environment]::ExpandEnvironmentVariables($Settings.Environment.ZipExecutablePath)
 $FileExtensions = $GlobalUpdateRules.FileTypes.Executable + $GlobalUpdateRules.FileTypes.Archive
 $ExtensionPattern = ($FileExtensions | ForEach-Object { [Regex]::Escape($_) }) -join '|'
@@ -199,13 +201,19 @@ function Select-UpdateTarget {
         if ($ShouldApply) {
             Write-UiMessage -UiKey "SelectList" -FormatArgs @($Candidate.Category, $Candidate.RepoPath) -NoNewline
         } else {
-            Write-UiMessage -UiKey "NoNewBuild" -FormatArgs @($Candidate.RepoPath, $Candidate.PublishedAt.ToString("yyyy-MM-dd HH:mm:ss")) -NoNewline
+            Write-UiMessage -UiKey "NoNewBuild" -FormatArgs @(
+                $Candidate.RepoPath,
+                $Candidate.PublishedAt.ToString("yyyy-MM-dd HH:mm:ss")
+            ) -NoNewline
         }
         if ($Candidate.Pin) { Write-UiMessage -UiKey "PinTag" -NoNewline }
         if ($Candidate.Force) { Write-UiMessage -UiKey "ForceTag" -NoNewline }
         Write-UiMessage -UiKey "Newline"
         if ($ShouldApply) {
-            Write-UiMessage -UiKey "SelectItem" -FormatArgs @($Candidate.TargetFileName, $Candidate.PublishedAt.ToString("yyyy-MM-dd HH:mm:ss"))
+            Write-UiMessage -UiKey "SelectItem" -FormatArgs @(
+                $Candidate.TargetFileName,
+                $Candidate.PublishedAt.ToString("yyyy-MM-dd HH:mm:ss")
+            )
             $Candidate
         }
     }
@@ -372,7 +380,9 @@ function Invoke-AppUpdate {
         } elseif ($FileCategory -eq "Archive") {
             Write-UiMessage -UiKey "ApplyList" -FormatArgs @("Archive", $VerifiedTask.FileName)
             if (Expand-ArchiveFile -FilePath $VerifiedTask.Path) {
-                Install-ExtractedContent -SourceDirectory (Split-Path -Path $VerifiedTask.Path) -Filters $Filters -FileName $VerifiedTask.FileName
+                Install-ExtractedContent -SourceDirectory (
+                    Split-Path -Path $VerifiedTask.Path
+                ) -Filters $Filters -FileName $VerifiedTask.FileName
             } else {
                 Write-UiMessage -UiKey "ExtractFail" -FormatArgs @($VerifiedTask.FileName)
             }
