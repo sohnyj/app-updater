@@ -57,10 +57,16 @@ function Write-UiMessage {
 }
 
 function Exit-WithMessage {
-    param ([string]$UiKey)
+    param (
+        [switch]$Success,
+        [switch]$Fail
+    )
 
-    if ($UiKey) { Write-UiMessage -UiKey $UiKey }
-    [System.Media.SystemSounds]::Hand.Play()
+    if ($Success) {
+        [System.Media.SystemSounds]::Asterisk.Play()
+    } elseif ($Fail) {
+        [System.Media.SystemSounds]::Hand.Play()
+    }
     Write-UiMessage -UiKey "PressEnterExit"
     $null = Read-Host
     exit
@@ -84,7 +90,7 @@ function Test-RequiredPath {
 
     if (-not (Test-Path -Path $Path -PathType $PathType)) {
         Write-UiMessage -UiKey $UiKey -FormatArgs @($Path)
-        Exit-WithMessage
+        Exit-WithMessage -Fail
     }
 }
 
@@ -105,7 +111,7 @@ function Test-RunningProcess {
         $UserChoice = Read-Host
         if ($UserChoice -notmatch "^[yY]$") {
             Write-UiMessage -UiKey "UserCancel"
-            Exit-WithMessage
+            Exit-WithMessage -Fail
         }
         foreach ($RunningProcess in $RunningProcesses) {
             Stop-Process -Id $RunningProcess.Process.Id -Force
@@ -134,7 +140,8 @@ function Get-ReleaseMetadata {
             }
         } catch {
             if ($_.Exception.Response.StatusCode -eq [System.Net.HttpStatusCode]::Forbidden) {
-                Exit-WithMessage -UiKey "ApiLimitError"
+                Write-UiMessage -UiKey "ApiLimitError"
+                Exit-WithMessage -Fail
             } else {
                 Write-UiMessage -UiKey "ApiRequestError" -FormatArgs @($RepositoryPath, $_.Exception.Message)
             }
@@ -148,7 +155,7 @@ function Get-LocalBuildTimestamp {
 
     if ([string]::IsNullOrEmpty($Apps.$Category.Executable)) {
         Write-UiMessage -UiKey "NoExecutable" -FormatArgs @($Category)
-        Exit-WithMessage
+        Exit-WithMessage -Fail
     }
     $LocalFilePath = Join-Path -Path $BaseDirectory -ChildPath $Apps.$Category.Executable
     if (Test-Path -Path $LocalFilePath -PathType Leaf) {
@@ -280,7 +287,15 @@ function Expand-ArchiveFile {
 
     $ParentDirectory = Split-Path -Path $FilePath -Parent
     & $ZipExecutablePath x "$FilePath" "-o$ParentDirectory" -y -bb0 | Out-Null
-    return ($LASTEXITCODE -eq 0)
+    if ($LASTEXITCODE -ne 0) { return $false }
+    if ($FilePath -like "*.tar.gz" -or $FilePath -like "*.tgz") {
+        $TarFile = Get-ChildItem -Path $ParentDirectory -Filter "*.tar" -File | Select-Object -First 1
+        if ($null -eq $TarFile) { return $false }
+        & $ZipExecutablePath x "$($TarFile.FullName)" "-o$ParentDirectory" -y -bb0 | Out-Null
+        Remove-Item -Path $TarFile.FullName -Force
+        return ($LASTEXITCODE -eq 0)
+    }
+    return $true
 }
 
 function Remove-PreviousInstallation {
@@ -437,7 +452,7 @@ $UpdateTargets = @(foreach ($AppProperty in $Apps.PSObject.Properties) {
 # [Phase 2] Fetch Release Metadata
 Write-UiMessage -UiKey "Step1MetaData"
 $ReleaseMetadata = Get-ReleaseMetadata -UpdateTargets $UpdateTargets
-if ($ReleaseMetadata.Count -eq 0) { Exit-WithMessage -UiKey "NoMetaData" }
+if ($ReleaseMetadata.Count -eq 0) { Write-UiMessage -UiKey "NoMetaData"; Exit-WithMessage -Fail }
 Write-UiMessage -UiKey "FetchList"
 $ReleaseMetadata | Select-Object -Property RepoPath, PublishedAt -Unique | ForEach-Object {
     Write-UiMessage -UiKey "FetchItem" -FormatArgs @($_.RepoPath, $_.PublishedAt.ToString("yyyy-MM-dd HH:mm:ss"))
@@ -447,7 +462,7 @@ $ReleaseMetadata | Select-Object -Property RepoPath, PublishedAt -Unique | ForEa
 Write-UiMessage -UiKey "Step2Comparison"
 $Candidates = Select-LatestBuildCandidate -ReleaseMetadata $ReleaseMetadata -UpdateTargets $UpdateTargets
 $BuildChoices = Select-UpdateTarget -Candidates $Candidates
-if ($BuildChoices.Count -eq 0) { Exit-WithMessage -UiKey "NoUpdateRequired" }
+if ($BuildChoices.Count -eq 0) { Write-UiMessage -UiKey "NoUpdateRequired"; Exit-WithMessage -Success }
 
 # [Phase 4] Download, Verify & Deploy
 Write-UiMessage -UiKey "Step3Download"
@@ -467,9 +482,8 @@ if ($VerifiedTasks.Count -gt 0) {
     Write-UiMessage -UiKey "Step7CacheClear"
     Clear-AppCache -IsFullUpdate $IsFullUpdate
     Write-UiMessage -UiKey "ProcessDone"
+    Exit-WithMessage -Success
 } else {
     Write-UiMessage -UiKey "DownloadAllFail"
+    Exit-WithMessage -Fail
 }
-
-# [Phase 5] Exit
-Exit-WithMessage
