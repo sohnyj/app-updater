@@ -48,6 +48,10 @@
         "Clear": true,
         "ForceOnPartial": false
     },
+    "StartMenu": {
+        "Create": true,
+        "ScriptName": "mpv_startmenu.ps1"
+    },
     "ErrorActionPreference": "Continue",
     "ProgressPreference": "SilentlyContinue"
 }

@@ -481,6 +481,12 @@ Remove-TemporaryDirectory -DownloadTasks $DownloadTasks
 if ($VerifiedTasks.Count -gt 0) {
     Write-UiMessage -UiKey "Step7CacheClear"
     Clear-AppCache -IsFullUpdate $IsFullUpdate
+    if ($Settings.StartMenu.Create -eq $true) {
+        $StartMenuScript = Join-Path -Path $PSScriptRoot -ChildPath $Settings.StartMenu.ScriptName
+        if (Test-Path -Path $StartMenuScript -PathType Leaf) {
+            & $StartMenuScript
+        }
+    }
     Write-UiMessage -UiKey "ProcessDone"
     Exit-WithMessage -Success
 } else {
