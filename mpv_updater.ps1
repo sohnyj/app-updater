@@ -289,7 +289,7 @@ function Expand-ArchiveFile {
     & $ZipExecutablePath x "$FilePath" "-o$ParentDirectory" -y -bb0 | Out-Null
     if ($LASTEXITCODE -ne 0) { return $false }
     if ($FilePath -like "*.tar.gz" -or $FilePath -like "*.tgz") {
-        $TarFile = Get-ChildItem -Path $ParentDirectory -Filter "*.tar" -File | Select-Object -First 1
+        $TarFile = Get-ChildItem -Path $ParentDirectory -Filter "*.tar" -File
         if ($null -eq $TarFile) { return $false }
         & $ZipExecutablePath x "$($TarFile.FullName)" "-o$ParentDirectory" -y -bb0 | Out-Null
         Remove-Item -Path $TarFile.FullName -Force
