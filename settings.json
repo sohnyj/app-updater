@@ -49,7 +49,7 @@
         "ForceOnPartial": false
     },
     "StartMenu": {
-        "Create": true,
+        "Create": false,
         "ScriptName": "mpv_startmenu.ps1"
     },
     "ErrorActionPreference": "Continue",
