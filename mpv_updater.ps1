@@ -333,16 +333,16 @@ function Install-ExtractedContent {
 
     $SearchDirectory = $SourceDirectory
     $SubDirectories = @(Get-ChildItem -Path $SourceDirectory -Directory)
-    $SubFiles = @(Get-ChildItem -Path $SourceDirectory -File) | Where-Object { $_.Name -ne $FileName }
+    $SubFiles = @(Get-ChildItem -Path $SourceDirectory -File | Where-Object { $_.Name -ne $FileName })
     if ($SubDirectories.Count -eq 1 -and $SubFiles.Count -eq 0) {
         $SearchDirectory = $SubDirectories.FullName
     }
     $DeployItems = if ($Filters -and $Filters.Count -gt 0) {
         foreach ($Filter in $Filters) {
-            @(Get-ChildItem -Path $SearchDirectory -Filter $Filter -Recurse)
+            @(Get-ChildItem -Path $SearchDirectory -Filter $Filter)
         }
     } else {
-        @(Get-ChildItem -Path $SearchDirectory) | Where-Object { $_.Name -ne $FileName }
+        @(Get-ChildItem -Path $SearchDirectory | Where-Object { $_.Name -ne $FileName })
     }
     foreach ($DeployItem in $DeployItems) {
         if (Test-IsExcludedItem -ItemName $DeployItem.Name) {
