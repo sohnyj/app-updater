@@ -75,8 +75,8 @@ function Exit-WithMessage {
 function Test-IsExcludedItem {
     param ([Parameter(Mandatory)] [string]$ItemName)
 
-    foreach ($Pattern in $GlobalUpdateRules.ExcludeList) {
-        if ($ItemName -like "*$Pattern*") { return $true }
+    foreach ($ExcludedName in $GlobalUpdateRules.ExcludeList) {
+        if ($ItemName -eq $ExcludedName) { return $true }
     }
     return $false
 }
