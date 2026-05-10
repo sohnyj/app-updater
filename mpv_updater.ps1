@@ -297,7 +297,7 @@ function Expand-ArchiveFile {
     & $ZipExecutablePath x "$FilePath" "-o$ParentDirectory" -y -bb0 | Out-Null
     if ($LASTEXITCODE -ne 0) { return $false }
     foreach ($Extension in $GlobalUpdateRules.FileTypes.BundleArchive) {
-        $BundleFile = Get-ChildItem -Path $ParentDirectory -Filter "*$Extension" -File | Select-Object -First 1
+        $BundleFile = Get-ChildItem -Path $ParentDirectory -Filter "*$Extension" -File
         if ($null -eq $BundleFile) { continue }
         & $ZipExecutablePath x "$($BundleFile.FullName)" "-o$ParentDirectory" -y -bb0 | Out-Null
         Remove-Item -Path $BundleFile.FullName -Force
