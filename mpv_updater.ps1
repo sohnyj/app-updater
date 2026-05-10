@@ -173,9 +173,14 @@ function Select-LatestBuildCandidate {
 
     if ($null -eq $ReleaseMetadata -or $ReleaseMetadata.Count -eq 0) { return @() }
     $Candidates = foreach ($UpdateTarget in $UpdateTargets) {
+        $FilterPattern = if ($UpdateTarget.Filter.Contains('*')) {
+            $UpdateTarget.Filter
+        } else {
+            "*$($UpdateTarget.Filter)*"
+        }
         $MatchedBuilds = @($ReleaseMetadata) | Where-Object {
             $_.RepoPath -eq $UpdateTarget.Path -and
-            $_.TargetFileName -like "*$($UpdateTarget.Filter)*" -and
+            $_.TargetFileName -like $FilterPattern -and
             $_.TargetFileName -match "($ExtensionPattern)$"
         }
         if ($MatchedBuilds.Count -eq 0) {
