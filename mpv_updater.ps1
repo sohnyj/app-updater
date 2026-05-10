@@ -132,7 +132,7 @@ function Get-ReleaseMetadata {
             foreach ($Asset in $ApiResponse.assets) {
                 [PSCustomObject]@{
                     RepoPath       = $RepositoryPath
-                    PublishedAt    = [DateTime]::Parse($ApiResponse.published_at, [System.Globalization.CultureInfo]::InvariantCulture)
+                    PublishedAt    = ([DateTime]::Parse($ApiResponse.published_at, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AssumeUniversal)).ToLocalTime()
                     TargetFileName = $Asset.name
                     DownloadUrl    = $Asset.browser_download_url
                     Sha256Hash     = $Asset.digest
