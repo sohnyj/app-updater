@@ -227,15 +227,13 @@ function Invoke-FileDownload {
 
     $DownloadResults = foreach ($BuildChoice in $BuildChoices) {
         $TargetDirectory = Join-Path -Path $UpdateDirectory -ChildPath $BuildChoice.Category
-        if (-not (Test-Path -Path $TargetDirectory -PathType Container)) {
-            New-Item -ItemType Directory -Path $TargetDirectory -Force | Out-Null
-        }
+        New-Item -ItemType Directory -Path $TargetDirectory -Force | Out-Null
         $FullFilePath = Join-Path -Path $TargetDirectory -ChildPath $BuildChoice.TargetFileName
         $TaskStatus = [PSCustomObject]@{
             Path         = $FullFilePath
             ExpectedHash = $BuildChoice.Sha256Hash
             Category     = $BuildChoice.Category
-            Info         = $BuildChoice
+            PublishedAt  = $BuildChoice.PublishedAt
             IsSuccess    = $false
             FileName     = $BuildChoice.TargetFileName
         }
@@ -383,10 +381,10 @@ function Invoke-AppUpdate {
     Write-UiMessage -UiKey "Step52Apply"
     foreach ($VerifiedTask in $VerifiedTasks) {
         $FileCategory = Get-FileCategory -FileName $VerifiedTask.FileName
-        $Filters = $Apps.($VerifiedTask.Info.Category).DeployFilters
+        $Filters = $Apps.($VerifiedTask.Category).DeployFilters
         if ($FileCategory -eq "Executable") {
             Write-UiMessage -UiKey "ApplyList" -FormatArgs @("File", $VerifiedTask.FileName)
-            Install-SingleExecutable -SourcePath $VerifiedTask.Path -Timestamp $VerifiedTask.Info.PublishedAt
+            Install-SingleExecutable -SourcePath $VerifiedTask.Path -Timestamp $VerifiedTask.PublishedAt
         } elseif ($FileCategory -eq "Archive") {
             Write-UiMessage -UiKey "ApplyList" -FormatArgs @("Archive", $VerifiedTask.FileName)
             if (Expand-ArchiveFile -FilePath $VerifiedTask.Path) {
