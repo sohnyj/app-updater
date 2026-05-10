@@ -296,7 +296,11 @@ function Expand-ArchiveFile {
     $ParentDirectory = Split-Path -Path $FilePath -Parent
     & $ZipExecutablePath x "$FilePath" "-o$ParentDirectory" -y -bb0 | Out-Null
     if ($LASTEXITCODE -ne 0) { return $false }
-    if ($FilePath -like "*.tar.gz" -or $FilePath -like "*.tgz") {
+    $IsNested = $false
+    foreach ($Extension in $GlobalUpdateRules.FileTypes.NestedArchive) {
+        if ($FilePath -like "*$Extension") { $IsNested = $true; break }
+    }
+    if ($IsNested) {
         $TarFile = Get-ChildItem -Path $ParentDirectory -Filter "*.tar" -File
         if ($null -eq $TarFile) { return $false }
         & $ZipExecutablePath x "$($TarFile.FullName)" "-o$ParentDirectory" -y -bb0 | Out-Null
