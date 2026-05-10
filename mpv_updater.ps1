@@ -29,9 +29,6 @@ $BaseDirectory = [Environment]::ExpandEnvironmentVariables($Settings.Environment
 $UpdateDirectory = [Environment]::ExpandEnvironmentVariables($Settings.Environment.Paths.UpdateDirectory)
 $AppCacheDirectories = @($Settings.Environment.Paths.AppCacheDirectories) | ForEach-Object { [Environment]::ExpandEnvironmentVariables($_) }
 $ZipExecutablePath = [Environment]::ExpandEnvironmentVariables($Settings.Environment.ZipExecutablePath)
-$FileExtensions = $GlobalUpdateRules.FileTypes.Executable + $GlobalUpdateRules.FileTypes.Archive
-$ExtensionPattern = ($FileExtensions | ForEach-Object { [Regex]::Escape($_) }) -join '|'
-
 $ErrorActionPreference = $Settings.ErrorActionPreference
 $ProgressPreference = $Settings.ProgressPreference
 
@@ -181,7 +178,7 @@ function Select-LatestBuildCandidate {
         $MatchedBuilds = @($ReleaseMetadata) | Where-Object {
             $_.RepoPath -eq $UpdateTarget.Path -and
             $_.TargetFileName -like $FilterPattern -and
-            $_.TargetFileName -match "($ExtensionPattern)$"
+            (Get-FileCategory -FileName $_.TargetFileName)
         }
         if ($MatchedBuilds.Count -eq 0) {
             Write-UiMessage -UiKey "BuildNotFound" -FormatArgs @($UpdateTarget.Path, $UpdateTarget.Filter)
