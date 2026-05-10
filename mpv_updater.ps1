@@ -174,6 +174,10 @@ function Select-LatestBuildCandidate {
 
     if ($null -eq $ReleaseMetadata -or $ReleaseMetadata.Count -eq 0) { return @() }
     $Candidates = foreach ($UpdateTarget in $UpdateTargets) {
+        if ([string]::IsNullOrEmpty($UpdateTarget.Filter)) {
+            Write-UiMessage -UiKey "EmptyFilter" -FormatArgs @($UpdateTarget.Path, $UpdateTarget.Category)
+            continue
+        }
         $FilterPattern = if ($UpdateTarget.Filter.Contains('*')) {
             $UpdateTarget.Filter
         } else {

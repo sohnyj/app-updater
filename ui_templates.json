@@ -16,6 +16,7 @@
     "FetchItem"          : { "Template": "         - {0} ({1})", "Color": "Gray" },
     "Step2Comparison"    : { "Template": "\n [S] Step 2: Selecting latest builds...", "Color": "Yellow" },
     "BuildNotFound"      : { "Template": "     [X] Build not found for filter: {0} [{1}]", "Color": "Red"},
+    "EmptyFilter"        : { "Template": "     [!] Filter is empty, skipping: {0} ({1})", "Color": "DarkYellow" },
     "NoNewBuild"         : { "Template": "     [!] No new builds found: {0}, Last release: {1}", "Color": "Gray" },
     "NoExecutable"       : { "Template": "     [X] Executable not found: {0}", "Color": "Red" },
     "SelectList"         : { "Template": "     [I] Selected {0}: {1}", "Color": "Cyan" },
