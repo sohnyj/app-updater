@@ -66,7 +66,7 @@ function Exit-WithMessage {
     }
     Write-UiMessage -UiKey "PressEnterExit"
     $null = Read-Host
-    exit
+    if ($Fail) { exit 1 } else { exit 0 }
 }
 
 function Test-IsExcludedItem {
