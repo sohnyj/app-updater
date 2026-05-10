@@ -296,16 +296,12 @@ function Expand-ArchiveFile {
     $ParentDirectory = Split-Path -Path $FilePath -Parent
     & $ZipExecutablePath x "$FilePath" "-o$ParentDirectory" -y -bb0 | Out-Null
     if ($LASTEXITCODE -ne 0) { return $false }
-    $IsNested = $false
-    foreach ($Extension in $GlobalUpdateRules.FileTypes.NestedArchive) {
-        if ($FilePath -like "*$Extension") { $IsNested = $true; break }
-    }
-    if ($IsNested) {
-        $TarFile = Get-ChildItem -Path $ParentDirectory -Filter "*.tar" -File
-        if ($null -eq $TarFile) { return $false }
-        & $ZipExecutablePath x "$($TarFile.FullName)" "-o$ParentDirectory" -y -bb0 | Out-Null
-        Remove-Item -Path $TarFile.FullName -Force
-        return ($LASTEXITCODE -eq 0)
+    foreach ($Extension in $GlobalUpdateRules.FileTypes.BundleArchive) {
+        $BundleFile = Get-ChildItem -Path $ParentDirectory -Filter "*$Extension" -File | Select-Object -First 1
+        if ($null -eq $BundleFile) { continue }
+        & $ZipExecutablePath x "$($BundleFile.FullName)" "-o$ParentDirectory" -y -bb0 | Out-Null
+        Remove-Item -Path $BundleFile.FullName -Force
+        if ($LASTEXITCODE -ne 0) { return $false }
     }
     return $true
 }
