@@ -93,6 +93,10 @@ function Test-RequiredPath {
 
 function Test-RunningProcess {
     $RunningProcesses = @(foreach ($AppName in $Apps.PSObject.Properties.Name) {
+        if ([string]::IsNullOrEmpty($Apps.$AppName.Executable)) {
+            Write-UiMessage -UiKey "NoExecutable" -FormatArgs @($AppName)
+            Exit-WithMessage -Fail
+        }
         $ExecutableName = [System.IO.Path]::GetFileNameWithoutExtension($Apps.$AppName.Executable)
         foreach ($Process in @(Get-Process -Name $ExecutableName -ErrorAction SilentlyContinue)) {
             [PSCustomObject]@{ AppName = $AppName; Process = $Process }
