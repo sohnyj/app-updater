@@ -473,27 +473,24 @@ Write-UiMessage -UiKey "Step3Download"
 $DownloadTasks = Invoke-FileDownload -BuildChoices $BuildChoices
 Write-UiMessage -UiKey "Step4Verification"
 $VerifiedTasks = @(Test-FileIntegrity -DownloadTasks $DownloadTasks)
-$IsFullUpdate = $false
-if ($VerifiedTasks.Count -gt 0) {
-    Write-UiMessage -UiKey "Step5Deploy"
-    $IsFullUpdate = Invoke-AppUpdate -VerifiedTasks $VerifiedTasks
-} else {
+if ($VerifiedTasks.Count -eq 0) {
     Write-UiMessage -UiKey "NoVerifiedBuilds"
-}
-Write-UiMessage -UiKey "Step6TempClear"
-Remove-TemporaryDirectory -DownloadTasks $DownloadTasks
-if ($VerifiedTasks.Count -gt 0) {
-    Write-UiMessage -UiKey "Step7CacheClear"
-    Clear-AppCache -IsFullUpdate $IsFullUpdate
-    if ($Settings.StartMenu.Create -eq $true) {
-        $StartMenuScript = Join-Path -Path $PSScriptRoot -ChildPath $Settings.StartMenu.Script
-        if (Test-Path -Path $StartMenuScript -PathType Leaf) {
-            & $StartMenuScript
-        }
-    }
-    Write-UiMessage -UiKey "ProcessDone"
-    Exit-WithMessage -Success
-} else {
+    Write-UiMessage -UiKey "Step6TempClear"
+    Remove-TemporaryDirectory -DownloadTasks $DownloadTasks
     Write-UiMessage -UiKey "DownloadAllFail"
     Exit-WithMessage -Fail
 }
+Write-UiMessage -UiKey "Step5Deploy"
+$IsFullUpdate = Invoke-AppUpdate -VerifiedTasks $VerifiedTasks
+Write-UiMessage -UiKey "Step6TempClear"
+Remove-TemporaryDirectory -DownloadTasks $DownloadTasks
+Write-UiMessage -UiKey "Step7CacheClear"
+Clear-AppCache -IsFullUpdate $IsFullUpdate
+if ($Settings.StartMenu.Create -eq $true) {
+    $StartMenuScript = Join-Path -Path $PSScriptRoot -ChildPath $Settings.StartMenu.Script
+    if (Test-Path -Path $StartMenuScript -PathType Leaf) {
+        & $StartMenuScript
+    }
+}
+Write-UiMessage -UiKey "ProcessDone"
+Exit-WithMessage -Success
