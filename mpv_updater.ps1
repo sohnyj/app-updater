@@ -131,7 +131,6 @@ function Get-ReleaseMetadata {
         try {
             $ApiEndpointUri = $GlobalUpdateRules.ApiEndpoint -f $RepositoryPath
             $ApiResponse = Invoke-RestMethod -Uri $ApiEndpointUri -Method Get -TimeoutSec 15
-            if ($null -eq $ApiResponse.assets -or $ApiResponse.assets.Count -eq 0) { continue }
             foreach ($Asset in $ApiResponse.assets) {
                 [PSCustomObject]@{
                     RepoPath       = $RepositoryPath
