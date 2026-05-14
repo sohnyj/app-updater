@@ -88,12 +88,17 @@ function Test-RequiredPath {
     }
 }
 
-function Test-RunningProcess {
-    $RunningProcesses = @(foreach ($AppName in $Apps.PSObject.Properties.Name) {
+function Test-AppExecutable {
+    foreach ($AppName in $Apps.PSObject.Properties.Name) {
         if ([string]::IsNullOrEmpty($Apps.$AppName.Executable)) {
             Write-UiMessage -UiKey "NoExecutable" -FormatArgs @($AppName)
             Exit-WithMessage -Fail
         }
+    }
+}
+
+function Test-RunningProcess {
+    $RunningProcesses = @(foreach ($AppName in $Apps.PSObject.Properties.Name) {
         $ExecutableName = [System.IO.Path]::GetFileNameWithoutExtension($Apps.$AppName.Executable)
         foreach ($Process in @(Get-Process -Name $ExecutableName -ErrorAction SilentlyContinue)) {
             [PSCustomObject]@{ AppName = $AppName; Process = $Process }
@@ -151,10 +156,6 @@ function Get-ReleaseMetadata {
 function Get-LocalBuildTimestamp {
     param ([Parameter(Mandatory)] [string]$Category)
 
-    if ([string]::IsNullOrEmpty($Apps.$Category.Executable)) {
-        Write-UiMessage -UiKey "NoExecutable" -FormatArgs @($Category)
-        Exit-WithMessage -Fail
-    }
     $LocalFilePath = Join-Path -Path $BaseDirectory -ChildPath $Apps.$Category.Executable
     if (Test-Path -Path $LocalFilePath -PathType Leaf) {
         $LastWriteTime = (Get-Item -Path $LocalFilePath).LastWriteTime
@@ -436,6 +437,7 @@ function Clear-AppCache {
 # ==============================================================================
 
 # [Phase 0] Pre-Flight
+Test-AppExecutable
 Test-RunningProcess
 Test-RequiredPath -Path $BaseDirectory -PathType Container -UiKey "NoBaseDir"
 Test-RequiredPath -Path $UpdateDirectory -PathType Container -UiKey "NoUpdateDir"
