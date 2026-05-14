@@ -72,10 +72,7 @@ function Exit-WithMessage {
 function Test-IsExcludedItem {
     param ([Parameter(Mandatory)] [string]$ItemName)
 
-    foreach ($ExcludedName in $GlobalUpdateRules.ExcludeList) {
-        if ($ItemName -eq $ExcludedName) { return $true }
-    }
-    return $false
+    return $GlobalUpdateRules.ExcludeList -contains $ItemName
 }
 
 function Test-RequiredPath {
