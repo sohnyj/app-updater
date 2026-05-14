@@ -490,7 +490,7 @@ if ($VerifiedTasks.Count -gt 0) {
     Write-UiMessage -UiKey "Step7CacheClear"
     Clear-AppCache -IsFullUpdate $IsFullUpdate
     if ($Settings.StartMenu.Create -eq $true) {
-        $StartMenuScript = Join-Path -Path $PSScriptRoot -ChildPath $Settings.StartMenu.ScriptName
+        $StartMenuScript = Join-Path -Path $PSScriptRoot -ChildPath $Settings.StartMenu.Script
         if (Test-Path -Path $StartMenuScript -PathType Leaf) {
             & $StartMenuScript
         }

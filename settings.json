@@ -51,7 +51,7 @@
     },
     "StartMenu": {
         "Create": false,
-        "ScriptName": "mpv_startmenu.ps1"
+        "Script": "mpv_startmenu.ps1"
     },
     "ErrorActionPreference": "Continue",
     "ProgressPreference": "SilentlyContinue"
