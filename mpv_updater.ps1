@@ -169,7 +169,6 @@ function Select-LatestBuildCandidate {
         [Parameter(Mandatory)] [array]$UpdateTargets
     )
 
-    if ($null -eq $ReleaseMetadata -or $ReleaseMetadata.Count -eq 0) { return @() }
     $Candidates = foreach ($UpdateTarget in $UpdateTargets) {
         if ([string]::IsNullOrEmpty($UpdateTarget.Filter)) {
             Write-UiMessage -UiKey "EmptyFilter" -FormatArgs @($UpdateTarget.Path, $UpdateTarget.Category)
@@ -403,9 +402,8 @@ function Invoke-AppUpdate {
 }
 
 function Remove-TemporaryDirectory {
-    param ([array]$DownloadTasks)
+    param ([Parameter(Mandatory)] [array]$DownloadTasks)
 
-    if ($null -eq $DownloadTasks) { return }
     $UniqueDirectories = @($DownloadTasks | ForEach-Object { Split-Path -Path $_.Path -Parent } | Select-Object -Unique)
     foreach ($DirectoryToRemove in $UniqueDirectories) {
         if (Test-Path -Path $DirectoryToRemove -PathType Container) {
