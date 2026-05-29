@@ -189,9 +189,9 @@ function Select-LatestBuildCandidate {
         }
         foreach ($MatchedBuild in $MatchedBuilds) {
             $MatchedBuild | Select-Object -Property *,
-                @{Name="Category";Expression={$UpdateTarget.Category}},
-                @{Name="Pin";Expression={$UpdateTarget.Pin}},
-                @{Name="Force";Expression={$UpdateTarget.Force}}
+                @{Name = "Category"; Expression = { $UpdateTarget.Category } },
+                @{Name = "Pin"; Expression = { $UpdateTarget.Pin } },
+                @{Name = "Force"; Expression = { $UpdateTarget.Force } }
         }
     }
     return @($Candidates | Group-Object -Property Category | ForEach-Object {
