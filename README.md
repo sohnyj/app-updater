@@ -2,8 +2,6 @@
 
 Lightweight app updater that tracks GitHub Releases. Target apps and repositories are configurable via `settings.json`.
 
-No external dependencies — uses built-in PowerShell (`Invoke-WebRequest`, `Get-FileHash`, etc.) and 7-Zip for archive extraction.
-
 `mpv_updater.ps1` is an example name — copy and rename per app (e.g., `vscodium_updater.ps1`), each with its own `settings.json`.
 
 ## Requirements
@@ -29,7 +27,7 @@ Windows blocks direct `.ps1` execution by double-click — the shortcut bypasses
 powershell.exe -ExecutionPolicy Bypass -File .\updater_shortcut.ps1
 ```
 
-Run once to create `update.lnk`, then double-click it to run the updater.
+Run once, then double-click `update.lnk` to run the updater.
 
 ## How it works
 
@@ -58,7 +56,7 @@ On each run, `mpv_updater.ps1` performs the following steps. If the target execu
 | `ZipExecutablePath` | Path to `7z.exe` |
 
 > [!NOTE]
-> `BaseDirectory` is designed for user-space directories like `%LOCALAPPDATA%`. Using system-wide paths like `%PROGRAMFILES%` requires administrator privileges and is ***strongly discouraged*** — it bypasses UAC and risks unintended system-wide changes.
+> User-space directories like `%LOCALAPPDATA%` are recommended for `BaseDirectory`. System-wide paths like `%PROGRAMFILES%` require administrator privileges and are not recommended.
 
 ### `GlobalUpdateRules`
 
@@ -66,9 +64,10 @@ On each run, `mpv_updater.ps1` performs the following steps. If the target execu
 |-----|-------------|
 | `VersionComparison.ForceUpdate` | If `true`, always updates regardless of date |
 | `VersionComparison.OffsetMinutes` | Minutes added to local `LastWriteTime`. Compensates for build-to-publish time gap |
-| `FileTypes.Executable` | `LastWriteTime` is overwritten with release date for future comparison |
-| `FileTypes.Archive` | Extracted files keep their original `LastWriteTime` |
-| `ExcludeList` | Items excluded from deletion during full update (matched by name substring) |
+| `FileTypes.Executable` | Extensions deployed as a single file. `LastWriteTime` is overwritten with the release date for future comparison |
+| `FileTypes.Archive` | Extensions extracted before deployment. Extracted files keep their original `LastWriteTime` |
+| `FileTypes.BundleArchive` | Extensions of nested archives extracted once more after the outer archive (e.g., `.tar` inside `.tar.gz`) |
+| `ExcludeList` | Items excluded from deletion during full update (matched by exact name) |
 | `ApiEndpoint` | GitHub unauthenticated: 60 requests/hour rate limit |
 
 ### `Apps`
@@ -96,14 +95,6 @@ On each run, `mpv_updater.ps1` performs the following steps. If the target execu
 | `AppCache.ForceOnPartial` | If `true`, also clears cache on partial updates |
 | `ErrorActionPreference` | PowerShell error handling (`Continue` / `Stop`, etc.) |
 | `ProgressPreference` | Progress bar visibility (`SilentlyContinue` to suppress) |
-
-### Default settings
-
-| App | Source repository | Asset filter |
-|-----|------------------|--------------|
-| mpv | `sohnyj/minimal-mpv-winbuild` | `mpv-x86_64-v3` |
-| ffmpeg | `sohnyj/minimal-mpv-winbuild` | `ffmpeg-x86_64-v3` |
-| yt-dlp | `yt-dlp/yt-dlp-nightly-builds` | `yt-dlp.exe` |
 
 ## Example: multiple update sources
 
@@ -139,8 +130,6 @@ Multiple repositories can be listed under `UpdateTargets` for the same app. The 
     }
 }
 ```
-
-Set `"Pin": true` to prefer a specific source over latest-by-date selection. Set `"Force": true` on a target to always update it regardless of date.
 
 ## Example: VSCodium
 
@@ -184,6 +173,10 @@ Any app distributed via GitHub Releases can be tracked. Example: VSCodium as a p
     "AppCache": {
         "Clear": true,
         "ForceOnPartial": false
+    },
+    "StartMenu": {
+        "Create": false,
+        "Script": "vscodium_startmenu.ps1"
     },
     "ErrorActionPreference": "Continue",
     "ProgressPreference": "SilentlyContinue"
