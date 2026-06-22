@@ -1,6 +1,4 @@
-# ==============================================================================
-# SECTION 1. Configuration & Environment
-# ==============================================================================
+# === Configuration & Environment ===
 
 function Import-JsonFile {
     param ([Parameter(Mandatory)] [string]$FilePath)
@@ -32,9 +30,7 @@ $ZipExecutablePath = [Environment]::ExpandEnvironmentVariables($Settings.Environ
 $ErrorActionPreference = $Settings.ErrorActionPreference
 $ProgressPreference = $Settings.ProgressPreference
 
-# ==============================================================================
-# SECTION 2. Functions
-# ==============================================================================
+# === Functions ===
 
 function Write-UiMessage {
     param (
@@ -429,9 +425,7 @@ function Clear-AppCache {
     }
 }
 
-# ==============================================================================
-# SECTION 3. Main
-# ==============================================================================
+# === Main ===
 
 # [Phase 0] Pre-Flight
 Assert-AppExecutable
