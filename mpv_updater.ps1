@@ -122,11 +122,15 @@ function Stop-RunningProcess {
 function Get-ReleaseMetadata {
     param ([Parameter(Mandatory)] [array]$UpdateTargets)
 
+    $RequestHeaders = @{}
+    if (-not [string]::IsNullOrEmpty($GlobalUpdateRules.ApiToken)) {
+        $RequestHeaders["Authorization"] = "Bearer $($GlobalUpdateRules.ApiToken)"
+    }
     $UniqueRepositoryPaths = @($UpdateTargets.Path) | Select-Object -Unique
     $ReleaseMetadata = @(foreach ($RepositoryPath in $UniqueRepositoryPaths) {
         try {
             $ApiEndpointUri = $GlobalUpdateRules.ApiEndpoint -f $RepositoryPath
-            $ApiResponse = Invoke-RestMethod -Uri $ApiEndpointUri -Method Get -TimeoutSec 15
+            $ApiResponse = Invoke-RestMethod -Uri $ApiEndpointUri -Method Get -TimeoutSec 15 -Headers $RequestHeaders
             foreach ($Asset in $ApiResponse.assets) {
                 [PSCustomObject]@{
                     RepositoryPath = $RepositoryPath
