@@ -2,13 +2,12 @@
 
 Lightweight app updater that tracks GitHub Releases. Target apps and repositories are configurable via `settings.json`.
 
-`mpv_updater.ps1` is an example name — copy and rename per app (e.g., `vscodium_updater.ps1`), each with its own `settings.json`.
+`mpv_updater.ps1` is an example name. Copy and rename per app (e.g., `vscodium_updater.ps1`), each with its own `settings.json`.
 
 ## Requirements
 
 - PowerShell 5.1+ (built-in on Windows 10+)
-- [7-Zip](https://www.7-zip.org/) (`7z.exe`) for archive extraction
-    - A standalone `7z.exe` is sufficient; installation is not required.
+- [7-Zip](https://www.7-zip.org/) (`7z.exe`) for archive extraction. A standalone `7z.exe` works; no installation needed.
 
 ## Installation
 
@@ -19,7 +18,7 @@ Lightweight app updater that tracks GitHub Releases. Target apps and repositorie
 
 Creates `update.lnk` in `BaseDirectory` to launch `mpv_updater.ps1` via `powershell.exe -ExecutionPolicy Bypass`.
 
-Windows blocks direct `.ps1` execution by double-click — the shortcut bypasses this.
+Windows blocks direct `.ps1` execution by double-click; the shortcut bypasses this.
 
 **Usage:**
 
@@ -31,15 +30,15 @@ Run once, then double-click `update.lnk` to run the updater.
 
 ## How it works
 
-On each run, `mpv_updater.ps1` performs the following steps. If the target executable does not exist locally, date comparison is skipped and the latest release is installed unconditionally (first-run install).
+On first run (target executable absent), date comparison is skipped and the latest release is installed.
 
-1. **Pre-flight** — verifies target processes are not running and required paths/tools exist
-2. **Fetch metadata** — retrieves latest release info from configured GitHub repositories
-3. **Select targets** — compares release dates against local file timestamps
-4. **Download** — downloads selected release assets
-5. **Verify** — validates SHA256 hash against the GitHub `digest` field; warns if unavailable, excludes on mismatch
-6. **Deploy** — extracts archives and moves files into the installation directory
-7. **Cleanup** — removes temporary directories and optionally clears app cache
+1. **Pre-flight**: check target processes stopped, paths and tools present
+2. **Fetch metadata**: get latest release info from GitHub
+3. **Select targets**: compare release dates with local timestamps
+4. **Download**: fetch selected assets
+5. **Verify**: check SHA256 against `digest`; warn if missing, skip on mismatch
+6. **Deploy**: extract archives, move files to the install directory
+7. **Cleanup**: remove temp directories, optionally clear cache
 
 ## settings.json
 
@@ -50,9 +49,9 @@ On each run, `mpv_updater.ps1` performs the following steps. If the target execu
 
 | Key | Description |
 |-----|-------------|
-| `Paths.BaseDirectory` | App installation path |
-| `Paths.UpdateDirectory` | Update script and temp path — must be under `BaseDirectory` to be excluded from full-update deletion |
-| `Paths.AppCacheDirectories` | Cache directories to clean after update (contents only, not the directories) |
+| `Paths.BaseDirectory` | App install path |
+| `Paths.UpdateDirectory` | Script and temp path. Must be under `BaseDirectory` to survive full-update deletion |
+| `Paths.AppCacheDirectories` | Cache directories to clean after update (contents only) |
 | `ZipExecutablePath` | Path to `7z.exe` |
 
 > [!NOTE]
@@ -62,43 +61,47 @@ On each run, `mpv_updater.ps1` performs the following steps. If the target execu
 
 | Key | Description |
 |-----|-------------|
-| `VersionComparison.ForceUpdate` | If `true`, always updates regardless of date |
-| `VersionComparison.OffsetMinutes` | Minutes added to local `LastWriteTime`. Compensates for build-to-publish time gap |
-| `FileTypes.Executable` | Extensions deployed as a single file. `LastWriteTime` is overwritten with the release date for future comparison |
-| `FileTypes.Archive` | Extensions extracted before deployment. Extracted files keep their original `LastWriteTime` |
-| `FileTypes.BundleArchive` | Extensions of nested archives extracted once more after the outer archive (e.g., `.tar` inside `.tar.gz`) |
-| `ExcludeList` | Items excluded from deletion during full update (matched by exact name) |
-| `ApiEndpoint` | GitHub unauthenticated: 60 requests/hour rate limit |
+| `VersionComparison.ForceUpdate` | Always update regardless of date |
+| `VersionComparison.OffsetMinutes` | Minutes added to local `LastWriteTime` to offset the build-to-publish gap |
+| `FileTypes.Executable` | Extensions deployed as a single file; `LastWriteTime` set to the release date |
+| `FileTypes.Archive` | Extensions extracted before deploy; original `LastWriteTime` kept |
+| `FileTypes.BundleArchive` | Nested archives extracted once more (e.g., `.tar` inside `.tar.gz`) |
+| `ExcludeList` | Names kept during full-update deletion (exact match) |
+| `ApiEndpoint` | GitHub release API endpoint |
+| `ApiToken` | Token for the metadata request. Empty = 60 req/hour, set = 5000. Not used for downloads |
+
+> [!NOTE]
+> `ApiToken` is stored in plain text. Never commit or share a `settings.json` with a real token. Use a read-only, minimal-scope token (public repositories need none).
 
 ### `Apps`
 
 | Key | Description |
 |-----|-------------|
-| `Executable` | Executable name used to read `LastWriteTime` for comparison |
-| `UpdateTargets` | Repository/filter pairs to match release assets |
-| `DeployFilters` | Filter for items to deploy from extracted archive. Empty = deploy all |
+| `Executable` | Name used to read `LastWriteTime` |
+| `UpdateTargets` | Repository/filter pairs matching release assets |
+| `DeployFilters` | Items to deploy from an archive. Empty = all |
 
 ### `UpdateTargets`
 
 | Key | Description |
 |-----|-------------|
-| `Pin` | If `true`, preferred over other targets in the same app |
-| `Force` | If `true`, always updates this target regardless of date |
-| `Path` | GitHub repository path (`owner/repo`) |
-| `Filter` | Substring to match against release asset names |
+| `Pin` | Prefer this target over others in the same app |
+| `Force` | Always update this target regardless of date |
+| `Path` | Repository path (`owner/repo`) |
+| `Filter` | Substring matched against asset names |
 
 ### Misc options
 
 | Key | Description |
 |-----|-------------|
-| `AppCache.Clear` | If `true`, clears `AppCacheDirectories` on full update |
-| `AppCache.ForceOnPartial` | If `true`, also clears cache on partial updates |
-| `ErrorActionPreference` | PowerShell error handling (`Continue` / `Stop`, etc.) |
-| `ProgressPreference` | Progress bar visibility (`SilentlyContinue` to suppress) |
+| `AppCache.Clear` | Clear `AppCacheDirectories` on full update |
+| `AppCache.ForceOnPartial` | Also clear cache on partial updates |
+| `ErrorActionPreference` | PowerShell error handling (`Continue` / `Stop`) |
+| `ProgressPreference` | Progress bar visibility (`SilentlyContinue` to hide) |
 
 ## Example: multiple update sources
 
-Multiple repositories can be listed under `UpdateTargets` for the same app. The updater selects the most recent asset across all sources.
+List multiple repositories under one app's `UpdateTargets`; the updater picks the most recent asset across all sources.
 
 ```json
 "Apps": {
@@ -133,7 +136,7 @@ Multiple repositories can be listed under `UpdateTargets` for the same app. The 
 
 ## Example: VSCodium
 
-Any app distributed via GitHub Releases can be tracked. Example: VSCodium as a portable installation and update.
+Any app on GitHub Releases can be tracked. Example: portable VSCodium.
 
 ```json
 {
@@ -159,7 +162,8 @@ Any app distributed via GitHub Releases can be tracked. Example: VSCodium as a p
             "Archive": [".7z", ".zip", ".tar.gz"]
         },
         "ExcludeList": ["update.lnk"],
-        "ApiEndpoint": "https://api.github.com/repos/{0}/releases/latest"
+        "ApiEndpoint": "https://api.github.com/repos/{0}/releases/latest",
+        "ApiToken": ""
     },
     "Apps": {
         "vscodium": {
