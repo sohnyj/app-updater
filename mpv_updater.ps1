@@ -143,7 +143,11 @@ function Get-ReleaseMetadata {
                 }
             }
         } catch {
-            if ($_.Exception.Response -and $_.Exception.Response.StatusCode -eq [System.Net.HttpStatusCode]::Forbidden) {
+            $StatusCode = if ($_.Exception.Response) { $_.Exception.Response.StatusCode } else { $null }
+            if ($StatusCode -eq [System.Net.HttpStatusCode]::Unauthorized) {
+                Write-UiMessage -UiKey "ApiTokenError"
+                Exit-WithMessage -Fail
+            } elseif ($StatusCode -eq [System.Net.HttpStatusCode]::Forbidden) {
                 Write-UiMessage -UiKey "ApiLimitError"
                 Exit-WithMessage -Fail
             } else {
