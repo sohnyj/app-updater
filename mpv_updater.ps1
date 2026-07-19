@@ -30,6 +30,8 @@ $ZipExecutablePath = [Environment]::ExpandEnvironmentVariables($Settings.Environ
 $ErrorActionPreference = $Settings.ErrorActionPreference
 $ProgressPreference = $Settings.ProgressPreference
 
+$TimestampFormat = "yyyy-MM-dd HH:mm:ss"
+
 # === Functions ===
 
 function Write-UiMessage {
@@ -130,7 +132,7 @@ function Get-ReleaseMetadata {
     $ReleaseMetadata = @(foreach ($RepositoryPath in $UniqueRepositoryPaths) {
         try {
             $ApiEndpointUri = $GlobalUpdateRules.ApiEndpoint -f $RepositoryPath
-            $ApiResponse = Invoke-RestMethod -Uri $ApiEndpointUri -Method Get -TimeoutSec 15 -Headers $RequestHeaders
+            $ApiResponse = Invoke-RestMethod -Uri $ApiEndpointUri -TimeoutSec 15 -Headers $RequestHeaders
             foreach ($Asset in $ApiResponse.assets) {
                 [PSCustomObject]@{
                     RepositoryPath = $RepositoryPath
@@ -213,13 +215,13 @@ function Select-BuildChoice {
         if ($ShouldApply) {
             Write-UiMessage -UiKey "SelectList" -FormatArgs @($Candidate.AppName, $Candidate.RepositoryPath) -NoNewline
         } else {
-            Write-UiMessage -UiKey "NoNewBuild" -FormatArgs @($Candidate.RepositoryPath, $Candidate.PublishedAt.ToString("yyyy-MM-dd HH:mm:ss")) -NoNewline
+            Write-UiMessage -UiKey "NoNewBuild" -FormatArgs @($Candidate.RepositoryPath, $Candidate.PublishedAt.ToString($TimestampFormat)) -NoNewline
         }
         if ($Candidate.Pin) { Write-UiMessage -UiKey "PinTag" -NoNewline }
         if ($Candidate.Force) { Write-UiMessage -UiKey "ForceTag" -NoNewline }
         Write-UiMessage -UiKey "Newline"
         if ($ShouldApply) {
-            Write-UiMessage -UiKey "SelectItem" -FormatArgs @($Candidate.TargetFileName, $Candidate.PublishedAt.ToString("yyyy-MM-dd HH:mm:ss"))
+            Write-UiMessage -UiKey "SelectItem" -FormatArgs @($Candidate.TargetFileName, $Candidate.PublishedAt.ToString($TimestampFormat))
             $Candidate
         }
     }
@@ -325,7 +327,7 @@ function Install-Executable {
     Move-Item -Path $SourcePath -Destination $DestinationPath -Force
     Write-UiMessage -UiKey "Moved" -FormatArgs @($FileName)
     (Get-Item -Path $DestinationPath).LastWriteTime = $Timestamp
-    Write-UiMessage -UiKey "TimestampSync" -FormatArgs @($Timestamp.ToString("yyyy-MM-dd HH:mm:ss"))
+    Write-UiMessage -UiKey "TimestampSync" -FormatArgs @($Timestamp.ToString($TimestampFormat))
 }
 
 function Install-ExtractedContent {
@@ -341,7 +343,8 @@ function Install-ExtractedContent {
     if ($SubDirectories.Count -eq 1 -and $SubFiles.Count -eq 0) {
         $SearchDirectory = $SubDirectories.FullName
     }
-    $DeployItems = if ($Filters -and $Filters.Count -gt 0) {
+    $HasFilters = $Filters -and $Filters.Count -gt 0
+    $DeployItems = if ($HasFilters) {
         foreach ($Filter in $Filters) {
             @(Get-ChildItem -Path $SearchDirectory -Filter $Filter)
         }
@@ -358,7 +361,7 @@ function Install-ExtractedContent {
             Remove-Item -Path $DestinationItemPath -Recurse -Force
         }
         Move-Item -Path $DeployItem.FullName -Destination $DestinationItemPath -Force
-        if ($Filters -and $Filters.Count -gt 0) {
+        if ($HasFilters) {
             Write-UiMessage -UiKey "MovedFiltered" -FormatArgs @($DeployItem.Name)
         } else {
             Write-UiMessage -UiKey "MovedFullStructure" -FormatArgs @($DeployItem.Name)
@@ -457,7 +460,7 @@ $ReleaseMetadata = Get-ReleaseMetadata -UpdateTargets $UpdateTargets
 if ($ReleaseMetadata.Count -eq 0) { Write-UiMessage -UiKey "NoMetaData"; Exit-WithMessage -Fail }
 Write-UiMessage -UiKey "FetchList"
 $ReleaseMetadata | Select-Object -Property RepositoryPath, PublishedAt -Unique | ForEach-Object {
-    Write-UiMessage -UiKey "FetchItem" -FormatArgs @($_.RepositoryPath, $_.PublishedAt.ToString("yyyy-MM-dd HH:mm:ss"))
+    Write-UiMessage -UiKey "FetchItem" -FormatArgs @($_.RepositoryPath, $_.PublishedAt.ToString($TimestampFormat))
 }
 
 # [Phase 3] Select Update Targets
