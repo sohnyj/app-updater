@@ -226,7 +226,7 @@ function Select-LatestAsset {
 function Select-ApplicableAsset {
     param ([Parameter(Mandatory)] [array]$Candidates)
 
-    $ForceAllUpdates = $UpdateRules.VersionComparison.ForceUpdate -eq $true
+    $ForceAllUpdates = $UpdateRules.VersionComparison.ForceUpdate
     $ApplicableAssets = foreach ($Candidate in $Candidates) {
         $ThresholdTime = Get-UpdateThresholdTime -AppName $Candidate.AppName
         $ShouldApply = $ThresholdTime -eq [DateTime]::MinValue -or
@@ -425,9 +425,9 @@ function Remove-TemporaryDirectory {
 function Clear-AppCache {
     param ([Parameter(Mandatory)] [bool]$IsFullUpdate)
 
-    if ($Settings.AppCache.Clear -ne $true) { Write-UiMessage -UiKey "CacheClearOff"; return }
+    if (-not $Settings.AppCache.Clear) { Write-UiMessage -UiKey "CacheClearOff"; return }
     if (-not $IsFullUpdate) {
-        if ($Settings.AppCache.ClearOnPartialUpdate -ne $true) { Write-UiMessage -UiKey "CacheClearSkipped"; return }
+        if (-not $Settings.AppCache.ClearOnPartialUpdate) { Write-UiMessage -UiKey "CacheClearSkipped"; return }
         Write-UiMessage -UiKey "CacheClearForced"
     }
     foreach ($AppCacheDirectory in $AppCacheDirectories) {
@@ -449,11 +449,11 @@ Assert-RequiredPath -Path $UpdateDirectory -PathType Container -UiKey "NoUpdateD
 $UpdateTargets = @(foreach ($AppProperty in $Apps.PSObject.Properties) {
     foreach ($UpdateTarget in $AppProperty.Value.UpdateTargets) {
         [PSCustomObject]@{
-            Preferred   = $UpdateTarget.Preferred -eq $true
+            Preferred   = $UpdateTarget.Preferred
             Repository  = $UpdateTarget.Repository
             AppName     = $AppProperty.Name
             AssetFilter = $UpdateTarget.AssetFilter
-            Force       = $UpdateTarget.Force -eq $true
+            Force       = $UpdateTarget.Force
         }
     }
 })
@@ -491,7 +491,7 @@ Write-UiMessage -UiKey "StepCleanTemporary"
 Remove-TemporaryDirectory -ApplicableAssets $ApplicableAssets
 Write-UiMessage -UiKey "StepCleanCache"
 Clear-AppCache -IsFullUpdate $IsFullUpdate
-if ($Settings.StartMenu.Create -eq $true) {
+if ($Settings.StartMenu.Create) {
     $StartMenuScript = Join-Path -Path $PSScriptRoot -ChildPath $Settings.StartMenu.Script
     if (Test-Path -Path $StartMenuScript -PathType Leaf) {
         & $StartMenuScript
