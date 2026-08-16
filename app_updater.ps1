@@ -26,7 +26,7 @@ $GlobalUpdateRules = $Settings.GlobalUpdateRules
 $BaseDirectory = [Environment]::ExpandEnvironmentVariables($Settings.Environment.Paths.BaseDirectory)
 $UpdateDirectory = [Environment]::ExpandEnvironmentVariables($Settings.Environment.Paths.UpdateDirectory)
 $AppCacheDirectories = @($Settings.Environment.Paths.AppCacheDirectories) | ForEach-Object { [Environment]::ExpandEnvironmentVariables($_) }
-$ZipExecutablePath = [Environment]::ExpandEnvironmentVariables($Settings.Environment.ZipExecutablePath)
+$TarExecutablePath = [Environment]::ExpandEnvironmentVariables($Settings.Environment.TarExecutablePath)
 $ErrorActionPreference = $Settings.ErrorActionPreference
 $ProgressPreference = $Settings.ProgressPreference
 
@@ -296,16 +296,8 @@ function Expand-ArchiveFile {
     param ([Parameter(Mandatory)] [string]$FilePath)
 
     $ParentDirectory = Split-Path -Path $FilePath -Parent
-    & $ZipExecutablePath x "$FilePath" "-o$ParentDirectory" -y -bb0 | Out-Null
-    if ($LASTEXITCODE -ne 0) { return $false }
-    foreach ($Extension in $GlobalUpdateRules.FileTypes.BundleArchive) {
-        $BundleFile = Get-ChildItem -Path $ParentDirectory -Filter "*$Extension" -File
-        if ($null -eq $BundleFile) { continue }
-        & $ZipExecutablePath x "$($BundleFile.FullName)" "-o$ParentDirectory" -y -bb0 | Out-Null
-        Remove-Item -Path $BundleFile.FullName -Force
-        if ($LASTEXITCODE -ne 0) { return $false }
-    }
-    return $true
+    & $TarExecutablePath -x -f "$FilePath" -C "$ParentDirectory" | Out-Null
+    return $LASTEXITCODE -eq 0
 }
 
 function Remove-PreviousInstallation {
@@ -443,7 +435,7 @@ Assert-AppExecutable
 Stop-RunningProcess
 Assert-RequiredPath -Path $BaseDirectory -PathType Container -UiKey "NoBaseDir"
 Assert-RequiredPath -Path $UpdateDirectory -PathType Container -UiKey "NoUpdateDir"
-Assert-RequiredPath -Path $ZipExecutablePath -PathType Leaf -UiKey "NoZip"
+Assert-RequiredPath -Path $TarExecutablePath -PathType Leaf -UiKey "NoTar"
 
 # [Phase 1] Flatten Update Targets
 $UpdateTargets = @(foreach ($AppProperty in $Apps.PSObject.Properties) {

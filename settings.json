@@ -7,7 +7,7 @@
                 "%LOCALAPPDATA%\\mpv\\cache"
             ]
         },
-        "ZipExecutablePath": "%ProgramFiles%\\7-Zip\\7z.exe"
+        "TarExecutablePath": "%SystemRoot%\\System32\\tar.exe"
     },
     "GlobalUpdateRules": {
         "VersionComparison": {
@@ -16,8 +16,7 @@
         },
         "FileTypes": {
             "Executable": [".exe"],
-            "Archive": [".7z", ".zip", ".tar.gz", ".tgz"],
-            "BundleArchive": [".tar"]
+            "Archive": [".7z", ".zip", ".tar", ".tar.gz", ".tgz"]
         },
         "ExcludeList": ["cache", "watch_later", "update.lnk"],
         "ApiEndpoint": "https://api.github.com/repos/{0}/releases/latest",

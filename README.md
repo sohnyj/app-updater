@@ -7,7 +7,7 @@ The scripts are app-agnostic. For another app, copy the folder and give it its o
 ## Requirements
 
 - PowerShell 5.1+ (built-in on Windows 10+)
-- [7-Zip](https://www.7-zip.org/) (`7z.exe`) for archive extraction. A standalone `7z.exe` works; no installation needed.
+- `tar.exe` for archive extraction — [built into Windows](https://learn.microsoft.com/en-us/windows/tar/) since Windows 10 1803
 
 ## Installation
 
@@ -52,7 +52,7 @@ On first run (target executable absent), date comparison is skipped and the late
 | `Paths.BaseDirectory` | App install path |
 | `Paths.UpdateDirectory` | Script and temp path. Must be under `BaseDirectory` to survive full-update deletion |
 | `Paths.AppCacheDirectories` | Cache directories to clean after update (contents only) |
-| `ZipExecutablePath` | Path to `7z.exe` |
+| `TarExecutablePath` | Path to `tar.exe`. Defaults to the `System32` copy |
 
 > [!NOTE]
 > User-space directories like `%LOCALAPPDATA%` are recommended for `BaseDirectory`. System-wide paths like `%PROGRAMFILES%` require administrator privileges and are not recommended.
@@ -64,8 +64,7 @@ On first run (target executable absent), date comparison is skipped and the late
 | `VersionComparison.ForceUpdate` | Always update regardless of date |
 | `VersionComparison.OffsetMinutes` | Minutes added to local `LastWriteTime` to offset the build-to-publish gap |
 | `FileTypes.Executable` | Extensions deployed as a single file; `LastWriteTime` set to the release date |
-| `FileTypes.Archive` | Extensions extracted before deploy; original `LastWriteTime` kept |
-| `FileTypes.BundleArchive` | Nested archives extracted once more (e.g., `.tar` inside `.tar.gz`) |
+| `FileTypes.Archive` | Extensions extracted before deploy; original `LastWriteTime` kept. Compressed tarballs unpack in one pass |
 | `ExcludeList` | Names kept during full-update deletion (exact match) |
 | `ApiEndpoint` | GitHub release API endpoint |
 | `ApiToken` | Token for the metadata request. Empty = 60 req/hour, set = 5000. Not used for downloads |
@@ -150,7 +149,7 @@ Any app on GitHub Releases can be tracked. Example: portable VSCodium.
                 "%APPDATA%\\VSCodium\\logs"
             ]
         },
-        "ZipExecutablePath": "%ProgramFiles%\\7-Zip\\7z.exe"
+        "TarExecutablePath": "%SystemRoot%\\System32\\tar.exe"
     },
     "GlobalUpdateRules": {
         "VersionComparison": {
@@ -159,7 +158,7 @@ Any app on GitHub Releases can be tracked. Example: portable VSCodium.
         },
         "FileTypes": {
             "Executable": [".exe"],
-            "Archive": [".7z", ".zip", ".tar.gz"]
+            "Archive": [".7z", ".zip", ".tar", ".tar.gz"]
         },
         "ExcludeList": ["update.lnk"],
         "ApiEndpoint": "https://api.github.com/repos/{0}/releases/latest",
