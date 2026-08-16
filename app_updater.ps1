@@ -194,20 +194,27 @@ function Select-LatestBuildCandidate {
         } else {
             "*$($UpdateTarget.Filter)*"
         }
-        $MatchedBuilds = @($ReleaseMetadata) | Where-Object {
-            $_.RepositoryPath -eq $UpdateTarget.Path -and
-            $_.TargetFileName -like $FilterPattern -and
-            (Get-FileCategory -FileName $_.TargetFileName)
-        }
+        $MatchedBuilds = @(foreach ($Metadata in $ReleaseMetadata) {
+            if ($Metadata.RepositoryPath -ne $UpdateTarget.Path -or $Metadata.TargetFileName -notlike $FilterPattern) { continue }
+            $FileCategory = Get-FileCategory -FileName $Metadata.TargetFileName
+            if ($null -eq $FileCategory) { continue }
+            [PSCustomObject]@{
+                AppName        = $UpdateTarget.AppName
+                RepositoryPath = $Metadata.RepositoryPath
+                TargetFileName = $Metadata.TargetFileName
+                PublishedAt    = $Metadata.PublishedAt
+                DownloadUrl    = $Metadata.DownloadUrl
+                Sha256Hash     = $Metadata.Sha256Hash
+                FileCategory   = $FileCategory
+                Pin            = $UpdateTarget.Pin
+                Force          = $UpdateTarget.Force
+                FilePath       = $null
+            }
+        })
         if ($MatchedBuilds.Count -eq 0) {
             Write-UiMessage -UiKey "BuildNotFound" -FormatArgs @($UpdateTarget.Path, $UpdateTarget.Filter)
         }
-        foreach ($MatchedBuild in $MatchedBuilds) {
-            $MatchedBuild | Select-Object -Property *,
-                @{Name = "AppName"; Expression = { $UpdateTarget.AppName } },
-                @{Name = "Pin"; Expression = { $UpdateTarget.Pin } },
-                @{Name = "Force"; Expression = { $UpdateTarget.Force } }
-        }
+        $MatchedBuilds
     }
     return @($Candidates | Group-Object -Property AppName | ForEach-Object {
         $Pinned = @($_.Group | Where-Object { $_.Pin })
@@ -244,49 +251,46 @@ function Select-BuildChoice {
 function Invoke-FileDownload {
     param ([Parameter(Mandatory)] [array]$BuildChoices)
 
-    $DownloadResults = foreach ($BuildChoice in $BuildChoices) {
+    $Downloads = foreach ($BuildChoice in $BuildChoices) {
         $TargetDirectory = Join-Path -Path $UpdateDirectory -ChildPath $BuildChoice.AppName
         New-Item -ItemType Directory -Path $TargetDirectory -Force | Out-Null
-        $FullFilePath = Join-Path -Path $TargetDirectory -ChildPath $BuildChoice.TargetFileName
-        $DownloadResult = [PSCustomObject]@{
-            Path         = $FullFilePath
-            ExpectedHash = $BuildChoice.Sha256Hash
-            AppName      = $BuildChoice.AppName
-            PublishedAt  = $BuildChoice.PublishedAt
-            IsSuccess    = $false
-            FileName     = $BuildChoice.TargetFileName
-        }
+        $BuildChoice.FilePath = Join-Path -Path $TargetDirectory -ChildPath $BuildChoice.TargetFileName
+        $IsSuccess = $true
         try {
-            Invoke-WebRequest -Uri $BuildChoice.DownloadUrl -OutFile $FullFilePath -ErrorAction Stop
-            $DownloadResult.IsSuccess = $true
+            Invoke-WebRequest -Uri $BuildChoice.DownloadUrl -OutFile $BuildChoice.FilePath -ErrorAction Stop
         } catch {
+            $IsSuccess = $false
             Write-UiMessage -UiKey "DownloadFail" -FormatArgs @($BuildChoice.TargetFileName)
         }
-        Write-UiMessage -UiKey "DownloadListItem" -FormatArgs @($DownloadResult.AppName, $DownloadResult.FileName) -NoNewline
-        if ($DownloadResult.IsSuccess) { Write-UiMessage -UiKey "StatusOk" } else { Write-UiMessage -UiKey "StatusFail" }
-        $DownloadResult
+        Write-UiMessage -UiKey "DownloadListItem" -FormatArgs @($BuildChoice.AppName, $BuildChoice.TargetFileName) -NoNewline
+        if ($IsSuccess) {
+            Write-UiMessage -UiKey "StatusOk"
+            $BuildChoice
+        } else {
+            Write-UiMessage -UiKey "StatusFail"
+        }
     }
-    return @($DownloadResults)
+    return @($Downloads)
 }
 
 function Select-VerifiedDownload {
-    param ([Parameter(Mandatory)] [array]$DownloadResults)
+    param ([array]$Downloads)
 
-    $VerifiedDownloads = foreach ($DownloadResult in ($DownloadResults | Where-Object { $_.IsSuccess })) {
-        Write-UiMessage -UiKey "VerifyFileList" -FormatArgs @($DownloadResult.FileName)
-        $CalculatedFileHash = "sha256:$((Get-FileHash -Path $DownloadResult.Path -Algorithm SHA256).Hash.ToLower())"
+    $VerifiedDownloads = foreach ($Download in $Downloads) {
+        Write-UiMessage -UiKey "VerifyFileList" -FormatArgs @($Download.TargetFileName)
+        $CalculatedFileHash = "sha256:$((Get-FileHash -Path $Download.FilePath -Algorithm SHA256).Hash.ToLower())"
         Write-UiMessage -UiKey "VerifyFileItem" -FormatArgs @($CalculatedFileHash) -NoNewline
-        $IsHashMatched = if ([string]::IsNullOrEmpty($DownloadResult.ExpectedHash)) {
+        $IsHashMatched = if ([string]::IsNullOrEmpty($Download.Sha256Hash)) {
             Write-UiMessage -UiKey "HashNA"
             $true
-        } elseif ($CalculatedFileHash -eq $DownloadResult.ExpectedHash) {
+        } elseif ($CalculatedFileHash -eq $Download.Sha256Hash) {
             Write-UiMessage -UiKey "HashMatch"
             $true
         } else {
             Write-UiMessage -UiKey "HashMismatch"
             $false
         }
-        if ($IsHashMatched) { $DownloadResult }
+        if ($IsHashMatched) { $Download }
     }
     return @($VerifiedDownloads)
 }
@@ -392,17 +396,14 @@ function Invoke-AppUpdate {
     }
     Write-UiMessage -UiKey "Step52Apply"
     foreach ($VerifiedDownload in $VerifiedDownloads) {
-        $FileCategory = Get-FileCategory -FileName $VerifiedDownload.FileName
-        $Filters = $Apps.($VerifiedDownload.AppName).DeployFilters
-        if ($FileCategory -eq "Executable") {
-            Write-UiMessage -UiKey "ApplyList" -FormatArgs @("File", $VerifiedDownload.FileName)
-            Install-Executable -SourcePath $VerifiedDownload.Path -Timestamp $VerifiedDownload.PublishedAt
-        } elseif ($FileCategory -eq "Archive") {
-            Write-UiMessage -UiKey "ApplyList" -FormatArgs @("Archive", $VerifiedDownload.FileName)
-            if (Expand-ArchiveFile -FilePath $VerifiedDownload.Path) {
-                Install-ExtractedContent -SourceDirectory (Split-Path -Path $VerifiedDownload.Path) -Filters $Filters -FileName $VerifiedDownload.FileName
+        Write-UiMessage -UiKey "ApplyList" -FormatArgs @($VerifiedDownload.FileCategory, $VerifiedDownload.TargetFileName)
+        if ($VerifiedDownload.FileCategory -eq "Executable") {
+            Install-Executable -SourcePath $VerifiedDownload.FilePath -Timestamp $VerifiedDownload.PublishedAt
+        } elseif ($VerifiedDownload.FileCategory -eq "Archive") {
+            if (Expand-ArchiveFile -FilePath $VerifiedDownload.FilePath) {
+                Install-ExtractedContent -SourceDirectory (Split-Path -Path $VerifiedDownload.FilePath) -Filters $Apps.($VerifiedDownload.AppName).DeployFilters -FileName $VerifiedDownload.TargetFileName
             } else {
-                Write-UiMessage -UiKey "ExtractFail" -FormatArgs @($VerifiedDownload.FileName)
+                Write-UiMessage -UiKey "ExtractFail" -FormatArgs @($VerifiedDownload.TargetFileName)
             }
         }
     }
@@ -410,9 +411,9 @@ function Invoke-AppUpdate {
 }
 
 function Remove-TemporaryDirectory {
-    param ([Parameter(Mandatory)] [array]$DownloadResults)
+    param ([Parameter(Mandatory)] [array]$BuildChoices)
 
-    $UniqueDirectories = @($DownloadResults | ForEach-Object { Split-Path -Path $_.Path -Parent } | Select-Object -Unique)
+    $UniqueDirectories = @($BuildChoices | ForEach-Object { Join-Path -Path $UpdateDirectory -ChildPath $_.AppName } | Select-Object -Unique)
     foreach ($DirectoryToRemove in $UniqueDirectories) {
         if (Test-Path -Path $DirectoryToRemove -PathType Container) {
             Remove-Item -Path $DirectoryToRemove -Recurse -Force
@@ -476,20 +477,20 @@ if ($BuildChoices.Count -eq 0) { Write-UiMessage -UiKey "NoUpdateRequired"; Exit
 
 # [Phase 4] Download, Verify & Deploy
 Write-UiMessage -UiKey "Step3Download"
-$DownloadResults = Invoke-FileDownload -BuildChoices $BuildChoices
+$Downloads = Invoke-FileDownload -BuildChoices $BuildChoices
 Write-UiMessage -UiKey "Step4Verification"
-$VerifiedDownloads = @(Select-VerifiedDownload -DownloadResults $DownloadResults)
+$VerifiedDownloads = @(Select-VerifiedDownload -Downloads $Downloads)
 if ($VerifiedDownloads.Count -eq 0) {
     Write-UiMessage -UiKey "NoVerifiedBuilds"
     Write-UiMessage -UiKey "Step6TempClear"
-    Remove-TemporaryDirectory -DownloadResults $DownloadResults
+    Remove-TemporaryDirectory -BuildChoices $BuildChoices
     Write-UiMessage -UiKey "DownloadAllFail"
     Exit-WithMessage -Fail
 }
 Write-UiMessage -UiKey "Step5Deploy"
 $IsFullUpdate = Invoke-AppUpdate -VerifiedDownloads $VerifiedDownloads
 Write-UiMessage -UiKey "Step6TempClear"
-Remove-TemporaryDirectory -DownloadResults $DownloadResults
+Remove-TemporaryDirectory -BuildChoices $BuildChoices
 Write-UiMessage -UiKey "Step7CacheClear"
 Clear-AppCache -IsFullUpdate $IsFullUpdate
 if ($Settings.StartMenu.Create -eq $true) {
