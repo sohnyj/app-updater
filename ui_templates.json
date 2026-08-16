@@ -22,7 +22,6 @@
     "SelectedAsset"            : { "Template": "     [I] Selected {0}: {1}", "Color": "Cyan" },
     "SelectedAssetItem"        : { "Template": "         -> {0} ({1})", "Color": "White" },
     "StepDownload"             : { "Template": "\n [S] Downloading...", "Color": "Yellow" },
-    "DownloadAllFail"          : { "Template": "\n [X] All downloads failed.", "Color": "Red" },
     "DownloadItem"             : { "Template": "     [D] [{0}] {1}", "Color": "White" },
     "StepVerify"               : { "Template": "\n [S] Verifying integrity...", "Color": "Yellow" },
     "NoVerifiedAssets"         : { "Template": "\n [X] No asset passed verification.", "Color": "Red" },
