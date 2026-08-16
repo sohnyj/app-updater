@@ -1,4 +1,4 @@
-# Usage: powershell.exe -ExecutionPolicy Bypass -File .\mpv_startmenu.ps1
+# Usage: powershell.exe -ExecutionPolicy Bypass -File .\app_startmenu_shortcut.ps1
 
 $BaseDirectory = Join-Path $env:LOCALAPPDATA "mpv"
 $UserStartMenuPath = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs"

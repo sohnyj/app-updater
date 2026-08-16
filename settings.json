@@ -52,7 +52,7 @@
     },
     "StartMenu": {
         "Create": false,
-        "Script": "mpv_startmenu.ps1"
+        "Script": "app_startmenu_shortcut.ps1"
     },
     "ErrorActionPreference": "Continue",
     "ProgressPreference": "SilentlyContinue"

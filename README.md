@@ -2,7 +2,7 @@
 
 Lightweight app updater that tracks GitHub Releases. Target apps and repositories are configurable via `settings.json`.
 
-`mpv_updater.ps1` is an example name. Copy and rename per app (e.g., `vscodium_updater.ps1`), each with its own `settings.json`.
+The scripts are app-agnostic. For another app, copy the folder and give it its own `settings.json`.
 
 ## Requirements
 
@@ -14,16 +14,16 @@ Lightweight app updater that tracks GitHub Releases. Target apps and repositorie
 1. Click **Code** > **Download ZIP**
 2. Extract to `%LOCALAPPDATA%\{APPNAME}\update`
 
-## updater_shortcut.ps1
+## app_updater_shortcut.ps1
 
-Creates `update.lnk` in `BaseDirectory` to launch `mpv_updater.ps1` via `powershell.exe -ExecutionPolicy Bypass`.
+Creates `update.lnk` in `BaseDirectory` to launch `app_updater.ps1` via `powershell.exe -ExecutionPolicy Bypass`.
 
 Windows blocks direct `.ps1` execution by double-click; the shortcut bypasses this.
 
 **Usage:**
 
 ```powershell
-powershell.exe -ExecutionPolicy Bypass -File .\updater_shortcut.ps1
+powershell.exe -ExecutionPolicy Bypass -File .\app_updater_shortcut.ps1
 ```
 
 Run once, then double-click `update.lnk` to run the updater.
@@ -180,7 +180,7 @@ Any app on GitHub Releases can be tracked. Example: portable VSCodium.
     },
     "StartMenu": {
         "Create": false,
-        "Script": "vscodium_startmenu.ps1"
+        "Script": "app_startmenu_shortcut.ps1"
     },
     "ErrorActionPreference": "Continue",
     "ProgressPreference": "SilentlyContinue"

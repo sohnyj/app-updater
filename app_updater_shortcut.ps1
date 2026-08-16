@@ -1,8 +1,7 @@
-# Create a Windows shortcut that launches mpv_updater.ps1.
-# Usage: powershell.exe -ExecutionPolicy Bypass -File .\updater_shortcut.ps1
+# Usage: powershell.exe -ExecutionPolicy Bypass -File .\app_updater_shortcut.ps1
 
 $BaseDirectory = Join-Path $env:LOCALAPPDATA "mpv"
-$ScriptFile = "mpv_updater.ps1"
+$ScriptFile = "app_updater.ps1"
 $ScriptPath = Join-Path $BaseDirectory "update\$ScriptFile"
 $ShortcutPath = Join-Path $BaseDirectory "update.lnk"
 
