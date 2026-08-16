@@ -1,4 +1,4 @@
-# === Configuration & Environment ===
+# Configuration & Environment
 
 function Import-JsonFile {
     param ([Parameter(Mandatory)] [string]$FilePath)
@@ -31,17 +31,17 @@ $Settings = Import-JsonFile -FilePath (Join-Path -Path $PSScriptRoot -ChildPath 
 $UiTemplates = Import-JsonFile -FilePath (Join-Path -Path $PSScriptRoot -ChildPath "ui_templates.json")
 
 $Apps = $Settings.Apps
-$SharedUpdateRules = $Settings.SharedUpdateRules
-$BaseDirectory = Resolve-ConfiguredPath -Path $Settings.Environment.Paths.BaseDirectory
-$UpdateDirectory = Resolve-ConfiguredPath -Path $Settings.Environment.Paths.UpdateDirectory
-$AppCacheDirectories = @($Settings.Environment.Paths.AppCacheDirectories) | ForEach-Object { Resolve-ConfiguredPath -Path $_ }
-$ErrorActionPreference = $Settings.ErrorActionPreference
-$ProgressPreference = $Settings.ProgressPreference
-
-$TimestampFormat = "yyyy-MM-dd HH:mm:ss"
+$UpdateRules = $Settings.UpdateRules
+$BaseDirectory = Resolve-ConfiguredPath -Path $Settings.Paths.BaseDirectory
+$UpdateDirectory = Resolve-ConfiguredPath -Path $Settings.Paths.UpdateDirectory
+$AppCacheDirectories = @($Settings.Paths.AppCacheDirectories) | ForEach-Object { Resolve-ConfiguredPath -Path $_ }
 $TarExecutablePath = Join-Path -Path $env:SystemRoot -ChildPath "System32\tar.exe"
 
-# === Functions ===
+$ErrorActionPreference = $Settings.ErrorActionPreference
+$ProgressPreference = $Settings.ProgressPreference
+$TimestampFormat = "yyyy-MM-dd HH:mm:ss"
+
+# Functions
 
 function Write-UiMessage {
     param (
@@ -79,7 +79,7 @@ function Exit-WithMessage {
 function Test-ExcludedItem {
     param ([Parameter(Mandatory)] [string]$ItemName)
 
-    return $SharedUpdateRules.ExcludedNames -contains $ItemName
+    return $UpdateRules.ExcludedNames -contains $ItemName
 }
 
 function Assert-RequiredPath {
@@ -134,13 +134,13 @@ function Get-ReleaseMetadata {
     param ([Parameter(Mandatory)] [array]$UpdateTargets)
 
     $RequestHeaders = @{}
-    if (-not [string]::IsNullOrEmpty($SharedUpdateRules.ApiToken)) {
-        $RequestHeaders["Authorization"] = "Bearer $($SharedUpdateRules.ApiToken)"
+    if (-not [string]::IsNullOrEmpty($UpdateRules.ApiToken)) {
+        $RequestHeaders["Authorization"] = "Bearer $($UpdateRules.ApiToken)"
     }
     $UniqueRepositories = @($UpdateTargets.Repository) | Select-Object -Unique
     $ReleaseMetadata = @(foreach ($Repository in $UniqueRepositories) {
         try {
-            $ApiEndpointUri = $SharedUpdateRules.ApiEndpoint -f $Repository
+            $ApiEndpointUri = $UpdateRules.ApiEndpoint -f $Repository
             $ApiResponse = Invoke-RestMethod -Uri $ApiEndpointUri -TimeoutSec 15 -Headers $RequestHeaders
             foreach ($Asset in $ApiResponse.assets) {
                 [PSCustomObject]@{
@@ -173,7 +173,7 @@ function Get-UpdateThresholdTime {
     $LocalFilePath = Join-Path -Path $BaseDirectory -ChildPath $Apps.$AppName.Executable
     if (Test-Path -Path $LocalFilePath -PathType Leaf) {
         $LastWriteTime = (Get-Item -Path $LocalFilePath).LastWriteTime
-        return $LastWriteTime.AddMinutes($SharedUpdateRules.VersionComparison.LocalTimestampOffsetMinutes)
+        return $LastWriteTime.AddMinutes($UpdateRules.VersionComparison.LocalTimestampOffsetMinutes)
     }
     return [DateTime]::MinValue
 }
@@ -226,7 +226,7 @@ function Select-LatestAsset {
 function Select-ApplicableAsset {
     param ([Parameter(Mandatory)] [array]$Candidates)
 
-    $ForceAllUpdates = $SharedUpdateRules.VersionComparison.ForceUpdate -eq $true
+    $ForceAllUpdates = $UpdateRules.VersionComparison.ForceUpdate -eq $true
     $ApplicableAssets = foreach ($Candidate in $Candidates) {
         $ThresholdTime = Get-UpdateThresholdTime -AppName $Candidate.AppName
         $ShouldApply = $ThresholdTime -eq [DateTime]::MinValue -or
@@ -299,7 +299,7 @@ function Get-FileCategory {
     param ([Parameter(Mandatory)] [string]$FileName)
 
     foreach ($Category in "Executable", "Archive") {
-        foreach ($Extension in $SharedUpdateRules.FileTypes.$Category) {
+        foreach ($Extension in $UpdateRules.FileTypes.$Category) {
             if ($FileName -like "*$Extension") { return $Category }
         }
     }
@@ -438,15 +438,14 @@ function Clear-AppCache {
     }
 }
 
-# === Main ===
-
-# [Phase 0] Validate configuration and paths
+# Main
+# Validate configuration and paths
 Assert-ConfiguredExecutable
 Stop-RunningProcess
 Assert-RequiredPath -Path $BaseDirectory -PathType Container -UiKey "NoBaseDirectory"
 Assert-RequiredPath -Path $UpdateDirectory -PathType Container -UiKey "NoUpdateDirectory"
 
-# [Phase 1] Flatten Update Targets
+# Flatten Update Targets
 $UpdateTargets = @(foreach ($AppProperty in $Apps.PSObject.Properties) {
     foreach ($UpdateTarget in $AppProperty.Value.UpdateTargets) {
         [PSCustomObject]@{
@@ -459,7 +458,7 @@ $UpdateTargets = @(foreach ($AppProperty in $Apps.PSObject.Properties) {
     }
 })
 
-# [Phase 2] Fetch Release Metadata
+# Fetch Release Metadata
 Write-UiMessage -UiKey "StepFetchMetadata"
 $ReleaseMetadata = Get-ReleaseMetadata -UpdateTargets $UpdateTargets
 if ($ReleaseMetadata.Count -eq 0) { Write-UiMessage -UiKey "NoMetadata"; Exit-WithMessage -Fail }
@@ -468,13 +467,13 @@ $ReleaseMetadata | Select-Object -Property Repository, PublishedAt -Unique | For
     Write-UiMessage -UiKey "FetchedRepositoryItem" -FormatArgs @($_.Repository, $_.PublishedAt.ToString($TimestampFormat))
 }
 
-# [Phase 3] Select Update Targets
+# Select Update Targets
 Write-UiMessage -UiKey "StepSelectAssets"
 $Candidates = Select-LatestAsset -ReleaseMetadata $ReleaseMetadata -UpdateTargets $UpdateTargets
 $ApplicableAssets = Select-ApplicableAsset -Candidates $Candidates
 if ($ApplicableAssets.Count -eq 0) { Write-UiMessage -UiKey "NoUpdateRequired"; Exit-WithMessage -Success }
 
-# [Phase 4] Download, Verify & Deploy
+# Download, Verify & Deploy
 Write-UiMessage -UiKey "StepDownload"
 $Downloads = Invoke-FileDownload -ApplicableAssets $ApplicableAssets
 Write-UiMessage -UiKey "StepVerify"

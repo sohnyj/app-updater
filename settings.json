@@ -1,14 +1,12 @@
 {
-    "Environment": {
-        "Paths": {
-            "BaseDirectory": "%LOCALAPPDATA%\\mpv",
-            "UpdateDirectory": "%LOCALAPPDATA%\\mpv\\update",
-            "AppCacheDirectories": [
-                "%LOCALAPPDATA%\\mpv\\cache"
-            ]
-        }
+    "Paths": {
+        "BaseDirectory": "%LOCALAPPDATA%\\mpv",
+        "UpdateDirectory": "%LOCALAPPDATA%\\mpv\\update",
+        "AppCacheDirectories": [
+            "%LOCALAPPDATA%\\mpv\\cache"
+        ]
     },
-    "SharedUpdateRules": {
+    "UpdateRules": {
         "VersionComparison": {
             "ForceUpdate": false,
             "LocalTimestampOffsetMinutes": 60

@@ -44,15 +44,15 @@ With no local executable, date comparison is skipped and the latest release inst
 > [!CAUTION]
 > A full update deletes everything in `BaseDirectory` except `UpdateDirectory` and `ExcludedNames` matches. `AppCache.Clear` also wipes `AppCacheDirectories`. ***Incorrect paths may cause data loss.***
 
-### `Environment`
+### `Paths`
 
 | Key | Description |
 |-----|-------------|
-| `Paths.BaseDirectory` | App install path |
-| `Paths.UpdateDirectory` | Script and temp path. Skipped by the full-update deletion |
-| `Paths.AppCacheDirectories` | Cache directories emptied after update |
+| `BaseDirectory` | App install path |
+| `UpdateDirectory` | Script and temp path. Skipped by the full-update deletion |
+| `AppCacheDirectories` | Cache directories emptied after update |
 
-### `SharedUpdateRules`
+### `UpdateRules`
 
 | Key | Description |
 |-----|-------------|
