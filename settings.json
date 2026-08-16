@@ -6,8 +6,7 @@
             "AppCacheDirectories": [
                 "%LOCALAPPDATA%\\mpv\\cache"
             ]
-        },
-        "TarExecutablePath": "%SystemRoot%\\System32\\tar.exe"
+        }
     },
     "SharedUpdateRules": {
         "VersionComparison": {
@@ -16,7 +15,7 @@
         },
         "FileTypes": {
             "Executable": [".exe"],
-            "Archive": [".7z", ".zip", ".tar", ".tar.gz", ".tgz"]
+            "Archive": [".7z", ".zip", ".tgz", ".tar.gz"]
         },
         "ExcludedNames": ["cache", "watch_later", "update.lnk"],
         "ApiEndpoint": "https://api.github.com/repos/{0}/releases/latest",

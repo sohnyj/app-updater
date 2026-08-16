@@ -6,7 +6,6 @@
     "ProceedUpdate"            : { "Template": "\n [I] Proceeding with update...", "Color": "DarkCyan" },
     "NoBaseDirectory"          : { "Template": "\n [X] Base folder not found: {0}", "Color": "Red" },
     "NoUpdateDirectory"        : { "Template": "\n [X] Update folder not found: {0}", "Color": "Red" },
-    "NoTar"                    : { "Template": "\n [X] tar not found: {0}", "Color": "Red" },
     "ApiLimitError"            : { "Template": "\n [X] GitHub API rate limit exceeded. (HTTP 403)", "Color": "Red" },
     "ApiTokenError"            : { "Template": "\n [X] GitHub API authentication failed. (HTTP 401)", "Color": "Red" },
     "ApiRequestError"          : { "Template": "     [X] API request failed: {0} ({1})", "Color": "Red" },

@@ -51,7 +51,6 @@ With no local executable, date comparison is skipped and the latest release inst
 | `Paths.BaseDirectory` | App install path |
 | `Paths.UpdateDirectory` | Script and temp path. Skipped by the full-update deletion |
 | `Paths.AppCacheDirectories` | Cache directories emptied after update |
-| `TarExecutablePath` | Path to `tar.exe`. Defaults to the `System32` copy |
 
 ### `SharedUpdateRules`
 

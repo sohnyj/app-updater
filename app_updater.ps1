@@ -35,11 +35,11 @@ $SharedUpdateRules = $Settings.SharedUpdateRules
 $BaseDirectory = Resolve-ConfiguredPath -Path $Settings.Environment.Paths.BaseDirectory
 $UpdateDirectory = Resolve-ConfiguredPath -Path $Settings.Environment.Paths.UpdateDirectory
 $AppCacheDirectories = @($Settings.Environment.Paths.AppCacheDirectories) | ForEach-Object { Resolve-ConfiguredPath -Path $_ }
-$TarExecutablePath = [Environment]::ExpandEnvironmentVariables($Settings.Environment.TarExecutablePath)
 $ErrorActionPreference = $Settings.ErrorActionPreference
 $ProgressPreference = $Settings.ProgressPreference
 
 $TimestampFormat = "yyyy-MM-dd HH:mm:ss"
+$TarExecutablePath = Join-Path -Path $env:SystemRoot -ChildPath "System32\tar.exe"
 
 # === Functions ===
 
@@ -445,7 +445,6 @@ Assert-ConfiguredExecutable
 Stop-RunningProcess
 Assert-RequiredPath -Path $BaseDirectory -PathType Container -UiKey "NoBaseDirectory"
 Assert-RequiredPath -Path $UpdateDirectory -PathType Container -UiKey "NoUpdateDirectory"
-Assert-RequiredPath -Path $TarExecutablePath -PathType Leaf -UiKey "NoTar"
 
 # [Phase 1] Flatten Update Targets
 $UpdateTargets = @(foreach ($AppProperty in $Apps.PSObject.Properties) {
