@@ -7,7 +7,6 @@ Scripts are app-agnostic. For another app, copy the folder with its own `setting
 ## Requirements
 
 - PowerShell 5.1+ (built-in on Windows 10+)
-- `tar.exe` for extraction — [built into Windows](https://learn.microsoft.com/en-us/windows/tar/) since Windows 10 1803
 
 ## Installation
 
@@ -32,18 +31,18 @@ Run once, then double-click `update.lnk`.
 
 With no local executable, date comparison is skipped and the latest release installs.
 
-1. **Pre-flight**: stop running apps, check paths and tools
+1. **Validate**: stop running apps, check paths and tools
 2. **Fetch metadata**: latest release info from GitHub
 3. **Select targets**: release dates against local timestamps
 4. **Download**: fetch selected assets
-5. **Verify**: SHA256 against `digest`; `[NA]` when absent, skip on mismatch
+5. **Verify**: SHA256 against `digest`; `[NONE]` when absent, skip on mismatch
 6. **Deploy**: extract archives, move files in
 7. **Cleanup**: remove temp directories, optionally clear cache
 
 ## settings.json
 
 > [!CAUTION]
-> A full update deletes everything in `BaseDirectory` except `UpdateDirectory` and `ExcludeList` matches. `AppCache.Clear` also wipes `AppCacheDirectories`. ***Incorrect paths may cause data loss.***
+> A full update deletes everything in `BaseDirectory` except `UpdateDirectory` and `ExcludedNames` matches. `AppCache.Clear` also wipes `AppCacheDirectories`. ***Incorrect paths may cause data loss.***
 
 ### `Environment`
 
@@ -54,15 +53,15 @@ With no local executable, date comparison is skipped and the latest release inst
 | `Paths.AppCacheDirectories` | Cache directories emptied after update |
 | `TarExecutablePath` | Path to `tar.exe`. Defaults to the `System32` copy |
 
-### `GlobalUpdateRules`
+### `SharedUpdateRules`
 
 | Key | Description |
 |-----|-------------|
 | `VersionComparison.ForceUpdate` | Update regardless of date |
-| `VersionComparison.OffsetMinutes` | Minutes added to local `LastWriteTime`, offsetting the build-to-publish gap |
+| `VersionComparison.LocalTimestampOffsetMinutes` | Minutes added to local `LastWriteTime`, offsetting the build-to-publish gap |
 | `FileTypes.Executable` | Deployed as a single file; `LastWriteTime` set to the release date |
 | `FileTypes.Archive` | Extracted before deploy; original `LastWriteTime` kept. Compressed tarballs unpack in one pass |
-| `ExcludeList` | Names kept during full-update deletion (exact match) |
+| `ExcludedNames` | Names kept during full-update deletion (exact match) |
 | `ApiEndpoint` | GitHub release API endpoint |
 | `ApiToken` | For the metadata request. Empty = 60 req/hour, set = 5000. Not used for downloads |
 
@@ -74,23 +73,23 @@ With no local executable, date comparison is skipped and the latest release inst
 | Key | Description |
 |-----|-------------|
 | `Executable` | Name used to read `LastWriteTime` |
-| `UpdateTargets` | Repository and filter pairs |
+| `UpdateTargets` | Repository and asset filter pairs |
 | `DeployFilters` | Items to deploy from an archive. Empty = all |
 
 ### `UpdateTargets`
 
 | Key | Description |
 |-----|-------------|
-| `Pin` | Prefer over the app's other targets |
+| `Preferred` | Prefer over the app's other targets |
 | `Force` | Update regardless of date |
-| `Path` | Repository as `owner/repo` |
-| `Filter` | Substring matched against asset names |
+| `Repository` | GitHub repository as `owner/repo` |
+| `AssetFilter` | Substring matched against asset names |
 
 ### Misc options
 
 | Key | Description |
 |-----|-------------|
 | `AppCache.Clear` | Clear `AppCacheDirectories` on full update |
-| `AppCache.ForceOnPartial` | Clear on partial updates too |
+| `AppCache.ClearOnPartialUpdate` | Clear on partial updates too |
 | `ErrorActionPreference` | PowerShell error handling (`Continue` / `Stop`) |
 | `ProgressPreference` | Progress bar visibility (`SilentlyContinue` to hide) |

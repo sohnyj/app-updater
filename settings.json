@@ -9,16 +9,16 @@
         },
         "TarExecutablePath": "%SystemRoot%\\System32\\tar.exe"
     },
-    "GlobalUpdateRules": {
+    "SharedUpdateRules": {
         "VersionComparison": {
             "ForceUpdate": false,
-            "OffsetMinutes": 60
+            "LocalTimestampOffsetMinutes": 60
         },
         "FileTypes": {
             "Executable": [".exe"],
             "Archive": [".7z", ".zip", ".tar", ".tar.gz", ".tgz"]
         },
-        "ExcludeList": ["cache", "watch_later", "update.lnk"],
+        "ExcludedNames": ["cache", "watch_later", "update.lnk"],
         "ApiEndpoint": "https://api.github.com/repos/{0}/releases/latest",
         "ApiToken": ""
     },
@@ -26,28 +26,28 @@
         "mpv": {
             "Executable": "mpv.exe",
             "UpdateTargets": [
-                { "Pin": false, "Force": false, "Path": "sohnyj/minimal-mpv-winbuild", "Filter": "mpv-x86_64-v3" }
+                { "Preferred": false, "Force": false, "Repository": "sohnyj/minimal-mpv-winbuild", "AssetFilter": "mpv-x86_64-v3" }
             ],
             "DeployFilters": ["mpv", "mpv.com", "mpv.exe"]
         },
         "ffmpeg": {
             "Executable": "ffmpeg.exe",
             "UpdateTargets": [
-                { "Pin": false, "Force": false, "Path": "sohnyj/minimal-mpv-winbuild", "Filter": "ffmpeg-x86_64-v3" }
+                { "Preferred": false, "Force": false, "Repository": "sohnyj/minimal-mpv-winbuild", "AssetFilter": "ffmpeg-x86_64-v3" }
             ],
             "DeployFilters": []
         },
         "yt-dlp": {
             "Executable": "yt-dlp.exe",
             "UpdateTargets": [
-                { "Pin": false, "Force": false, "Path": "yt-dlp/yt-dlp-nightly-builds", "Filter": "yt-dlp.exe" }
+                { "Preferred": false, "Force": false, "Repository": "yt-dlp/yt-dlp-nightly-builds", "AssetFilter": "yt-dlp.exe" }
             ],
             "DeployFilters": []
         }
     },
     "AppCache": {
         "Clear": true,
-        "ForceOnPartial": false
+        "ClearOnPartialUpdate": false
     },
     "StartMenu": {
         "Create": false,

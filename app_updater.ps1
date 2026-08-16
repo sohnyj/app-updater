@@ -18,7 +18,7 @@ function Import-JsonFile {
     }
 }
 
-function Resolve-DeletablePath {
+function Resolve-ConfiguredPath {
     param ([Parameter(Mandatory)] [string]$Path)
 
     $ExpandedPath = [System.IO.Path]::GetFullPath([Environment]::ExpandEnvironmentVariables($Path))
@@ -31,10 +31,10 @@ $Settings = Import-JsonFile -FilePath (Join-Path -Path $PSScriptRoot -ChildPath 
 $UiTemplates = Import-JsonFile -FilePath (Join-Path -Path $PSScriptRoot -ChildPath "ui_templates.json")
 
 $Apps = $Settings.Apps
-$GlobalUpdateRules = $Settings.GlobalUpdateRules
-$BaseDirectory = Resolve-DeletablePath -Path $Settings.Environment.Paths.BaseDirectory
-$UpdateDirectory = Resolve-DeletablePath -Path $Settings.Environment.Paths.UpdateDirectory
-$AppCacheDirectories = @($Settings.Environment.Paths.AppCacheDirectories) | ForEach-Object { Resolve-DeletablePath -Path $_ }
+$SharedUpdateRules = $Settings.SharedUpdateRules
+$BaseDirectory = Resolve-ConfiguredPath -Path $Settings.Environment.Paths.BaseDirectory
+$UpdateDirectory = Resolve-ConfiguredPath -Path $Settings.Environment.Paths.UpdateDirectory
+$AppCacheDirectories = @($Settings.Environment.Paths.AppCacheDirectories) | ForEach-Object { Resolve-ConfiguredPath -Path $_ }
 $TarExecutablePath = [Environment]::ExpandEnvironmentVariables($Settings.Environment.TarExecutablePath)
 $ErrorActionPreference = $Settings.ErrorActionPreference
 $ProgressPreference = $Settings.ProgressPreference
@@ -50,14 +50,14 @@ function Write-UiMessage {
         [switch]$NoNewline
     )
 
-    $UiElement = $UiTemplates.$UiKey
-    if ($null -eq $UiElement) { return }
+    $UiTemplate = $UiTemplates.$UiKey
+    if ($null -eq $UiTemplate) { return }
     $DisplayText = if ($FormatArgs -and $FormatArgs.Count -gt 0) {
-        $UiElement.Template -f $FormatArgs
+        $UiTemplate.Template -f $FormatArgs
     } else {
-        $UiElement.Template
+        $UiTemplate.Template
     }
-    Write-Host $DisplayText -ForegroundColor $UiElement.Color -NoNewline:$NoNewline
+    Write-Host $DisplayText -ForegroundColor $UiTemplate.Color -NoNewline:$NoNewline
 }
 
 function Exit-WithMessage {
@@ -79,7 +79,7 @@ function Exit-WithMessage {
 function Test-ExcludedItem {
     param ([Parameter(Mandatory)] [string]$ItemName)
 
-    return $GlobalUpdateRules.ExcludeList -contains $ItemName
+    return $SharedUpdateRules.ExcludedNames -contains $ItemName
 }
 
 function Assert-RequiredPath {
@@ -95,10 +95,10 @@ function Assert-RequiredPath {
     }
 }
 
-function Assert-AppExecutable {
+function Assert-ConfiguredExecutable {
     foreach ($AppName in $Apps.PSObject.Properties.Name) {
         if ([string]::IsNullOrEmpty($Apps.$AppName.Executable)) {
-            Write-UiMessage -UiKey "NoExecutable" -FormatArgs @($AppName)
+            Write-UiMessage -UiKey "NoConfiguredExecutable" -FormatArgs @($AppName)
             Exit-WithMessage -Fail
         }
     }
@@ -134,21 +134,21 @@ function Get-ReleaseMetadata {
     param ([Parameter(Mandatory)] [array]$UpdateTargets)
 
     $RequestHeaders = @{}
-    if (-not [string]::IsNullOrEmpty($GlobalUpdateRules.ApiToken)) {
-        $RequestHeaders["Authorization"] = "Bearer $($GlobalUpdateRules.ApiToken)"
+    if (-not [string]::IsNullOrEmpty($SharedUpdateRules.ApiToken)) {
+        $RequestHeaders["Authorization"] = "Bearer $($SharedUpdateRules.ApiToken)"
     }
-    $UniqueRepositoryPaths = @($UpdateTargets.Path) | Select-Object -Unique
-    $ReleaseMetadata = @(foreach ($RepositoryPath in $UniqueRepositoryPaths) {
+    $UniqueRepositories = @($UpdateTargets.Repository) | Select-Object -Unique
+    $ReleaseMetadata = @(foreach ($Repository in $UniqueRepositories) {
         try {
-            $ApiEndpointUri = $GlobalUpdateRules.ApiEndpoint -f $RepositoryPath
+            $ApiEndpointUri = $SharedUpdateRules.ApiEndpoint -f $Repository
             $ApiResponse = Invoke-RestMethod -Uri $ApiEndpointUri -TimeoutSec 15 -Headers $RequestHeaders
             foreach ($Asset in $ApiResponse.assets) {
                 [PSCustomObject]@{
-                    RepositoryPath = $RepositoryPath
-                    PublishedAt    = ([DateTime]::Parse($ApiResponse.published_at, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AssumeUniversal)).ToLocalTime()
-                    TargetFileName = $Asset.name
-                    DownloadUrl    = $Asset.browser_download_url
-                    Sha256Hash     = $Asset.digest
+                    Repository  = $Repository
+                    PublishedAt = ([DateTime]::Parse($ApiResponse.published_at, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AssumeUniversal)).ToLocalTime()
+                    AssetName   = $Asset.name
+                    DownloadUrl = $Asset.browser_download_url
+                    Digest      = $Asset.digest
                 }
             }
         } catch {
@@ -160,112 +160,112 @@ function Get-ReleaseMetadata {
                 Write-UiMessage -UiKey "ApiLimitError"
                 Exit-WithMessage -Fail
             } else {
-                Write-UiMessage -UiKey "ApiRequestError" -FormatArgs @($RepositoryPath, $_.Exception.Message)
+                Write-UiMessage -UiKey "ApiRequestError" -FormatArgs @($Repository, $_.Exception.Message)
             }
         }
     })
     return $ReleaseMetadata
 }
 
-function Get-LocalFileTimestamp {
+function Get-UpdateThresholdTime {
     param ([Parameter(Mandatory)] [string]$AppName)
 
     $LocalFilePath = Join-Path -Path $BaseDirectory -ChildPath $Apps.$AppName.Executable
     if (Test-Path -Path $LocalFilePath -PathType Leaf) {
         $LastWriteTime = (Get-Item -Path $LocalFilePath).LastWriteTime
-        return $LastWriteTime.AddMinutes($GlobalUpdateRules.VersionComparison.OffsetMinutes)
+        return $LastWriteTime.AddMinutes($SharedUpdateRules.VersionComparison.LocalTimestampOffsetMinutes)
     }
     return [DateTime]::MinValue
 }
 
-function Select-LatestBuildCandidate {
+function Select-LatestAsset {
     param (
         [Parameter(Mandatory)] [array]$ReleaseMetadata,
         [Parameter(Mandatory)] [array]$UpdateTargets
     )
 
     $Candidates = foreach ($UpdateTarget in $UpdateTargets) {
-        if ([string]::IsNullOrEmpty($UpdateTarget.Filter)) {
-            Write-UiMessage -UiKey "EmptyFilter" -FormatArgs @($UpdateTarget.Path, $UpdateTarget.AppName)
+        if ([string]::IsNullOrEmpty($UpdateTarget.AssetFilter)) {
+            Write-UiMessage -UiKey "EmptyAssetFilter" -FormatArgs @($UpdateTarget.Repository, $UpdateTarget.AppName)
             continue
         }
-        $FilterPattern = if ($UpdateTarget.Filter.Contains('*')) {
-            $UpdateTarget.Filter
+        $FilterPattern = if ($UpdateTarget.AssetFilter.Contains('*')) {
+            $UpdateTarget.AssetFilter
         } else {
-            "*$($UpdateTarget.Filter)*"
+            "*$($UpdateTarget.AssetFilter)*"
         }
-        $MatchedBuilds = @(foreach ($Metadata in $ReleaseMetadata) {
-            if ($Metadata.RepositoryPath -ne $UpdateTarget.Path -or $Metadata.TargetFileName -notlike $FilterPattern) { continue }
-            $FileCategory = Get-FileCategory -FileName $Metadata.TargetFileName
+        $MatchedAssets = @(foreach ($Metadata in $ReleaseMetadata) {
+            if ($Metadata.Repository -ne $UpdateTarget.Repository -or $Metadata.AssetName -notlike $FilterPattern) { continue }
+            $FileCategory = Get-FileCategory -FileName $Metadata.AssetName
             if ($null -eq $FileCategory) { continue }
             [PSCustomObject]@{
-                AppName        = $UpdateTarget.AppName
-                RepositoryPath = $Metadata.RepositoryPath
-                TargetFileName = $Metadata.TargetFileName
-                PublishedAt    = $Metadata.PublishedAt
-                DownloadUrl    = $Metadata.DownloadUrl
-                Sha256Hash     = $Metadata.Sha256Hash
-                FileCategory   = $FileCategory
-                Pin            = $UpdateTarget.Pin
-                Force          = $UpdateTarget.Force
-                FilePath       = $null
+                AppName      = $UpdateTarget.AppName
+                Repository   = $Metadata.Repository
+                AssetName    = $Metadata.AssetName
+                PublishedAt  = $Metadata.PublishedAt
+                DownloadUrl  = $Metadata.DownloadUrl
+                Digest       = $Metadata.Digest
+                FileCategory = $FileCategory
+                Preferred    = $UpdateTarget.Preferred
+                Force        = $UpdateTarget.Force
+                FilePath     = $null
             }
         })
-        if ($MatchedBuilds.Count -eq 0) {
-            Write-UiMessage -UiKey "BuildNotFound" -FormatArgs @($UpdateTarget.Path, $UpdateTarget.Filter)
+        if ($MatchedAssets.Count -eq 0) {
+            Write-UiMessage -UiKey "AssetNotFound" -FormatArgs @($UpdateTarget.Repository, $UpdateTarget.AssetFilter)
         }
-        $MatchedBuilds
+        $MatchedAssets
     }
     return @($Candidates | Group-Object -Property AppName | ForEach-Object {
-        $Pinned = @($_.Group | Where-Object { $_.Pin })
-        $SortSource = if ($Pinned.Count -gt 0) { $Pinned } else { $_.Group }
-        $SortSource | Sort-Object -Property PublishedAt -Descending | Select-Object -First 1
+        $PreferredAssets = @($_.Group | Where-Object { $_.Preferred })
+        $EligibleAssets = if ($PreferredAssets.Count -gt 0) { $PreferredAssets } else { $_.Group }
+        $EligibleAssets | Sort-Object -Property PublishedAt -Descending | Select-Object -First 1
     })
 }
 
-function Select-BuildChoice {
+function Select-ApplicableAsset {
     param ([Parameter(Mandatory)] [array]$Candidates)
 
-    $GlobalForceUpdate = $GlobalUpdateRules.VersionComparison.ForceUpdate -eq $true
-    $BuildChoices = foreach ($Candidate in $Candidates) {
-        $LocalFileTime = Get-LocalFileTimestamp -AppName $Candidate.AppName
-        $ShouldApply = $LocalFileTime -eq [DateTime]::MinValue -or
-                       $GlobalForceUpdate -or $Candidate.Force -or
-                       $Candidate.PublishedAt -gt $LocalFileTime
+    $ForceAllUpdates = $SharedUpdateRules.VersionComparison.ForceUpdate -eq $true
+    $ApplicableAssets = foreach ($Candidate in $Candidates) {
+        $ThresholdTime = Get-UpdateThresholdTime -AppName $Candidate.AppName
+        $ShouldApply = $ThresholdTime -eq [DateTime]::MinValue -or
+                       $ForceAllUpdates -or $Candidate.Force -or
+                       $Candidate.PublishedAt -gt $ThresholdTime
         if ($ShouldApply) {
-            Write-UiMessage -UiKey "SelectList" -FormatArgs @($Candidate.AppName, $Candidate.RepositoryPath) -NoNewline
+            Write-UiMessage -UiKey "SelectedAsset" -FormatArgs @($Candidate.AppName, $Candidate.Repository) -NoNewline
         } else {
-            Write-UiMessage -UiKey "NoNewBuild" -FormatArgs @($Candidate.RepositoryPath, $Candidate.PublishedAt.ToString($TimestampFormat)) -NoNewline
+            Write-UiMessage -UiKey "NoNewRelease" -FormatArgs @($Candidate.Repository, $Candidate.PublishedAt.ToString($TimestampFormat)) -NoNewline
         }
-        if ($Candidate.Pin) { Write-UiMessage -UiKey "PinTag" -NoNewline }
+        if ($Candidate.Preferred) { Write-UiMessage -UiKey "PreferredTag" -NoNewline }
         if ($Candidate.Force) { Write-UiMessage -UiKey "ForceTag" -NoNewline }
-        Write-UiMessage -UiKey "Newline"
+        Write-UiMessage -UiKey "EndLine"
         if ($ShouldApply) {
-            Write-UiMessage -UiKey "SelectItem" -FormatArgs @($Candidate.TargetFileName, $Candidate.PublishedAt.ToString($TimestampFormat))
+            Write-UiMessage -UiKey "SelectedAssetItem" -FormatArgs @($Candidate.AssetName, $Candidate.PublishedAt.ToString($TimestampFormat))
             $Candidate
         }
     }
-    return @($BuildChoices)
+    return @($ApplicableAssets)
 }
 
 function Invoke-FileDownload {
-    param ([Parameter(Mandatory)] [array]$BuildChoices)
+    param ([Parameter(Mandatory)] [array]$ApplicableAssets)
 
-    $Downloads = foreach ($BuildChoice in $BuildChoices) {
-        $TargetDirectory = Join-Path -Path $UpdateDirectory -ChildPath $BuildChoice.AppName
-        New-Item -ItemType Directory -Path $TargetDirectory -Force | Out-Null
-        $BuildChoice.FilePath = Join-Path -Path $TargetDirectory -ChildPath $BuildChoice.TargetFileName
+    $Downloads = foreach ($ApplicableAsset in $ApplicableAssets) {
+        $DownloadDirectory = Join-Path -Path $UpdateDirectory -ChildPath $ApplicableAsset.AppName
+        New-Item -ItemType Directory -Path $DownloadDirectory -Force | Out-Null
+        $ApplicableAsset.FilePath = Join-Path -Path $DownloadDirectory -ChildPath $ApplicableAsset.AssetName
         $IsSuccess = $true
         try {
-            Invoke-WebRequest -Uri $BuildChoice.DownloadUrl -OutFile $BuildChoice.FilePath -ErrorAction Stop
+            Invoke-WebRequest -Uri $ApplicableAsset.DownloadUrl -OutFile $ApplicableAsset.FilePath -ErrorAction Stop
         } catch {
             $IsSuccess = $false
-            Write-UiMessage -UiKey "DownloadFail" -FormatArgs @($BuildChoice.TargetFileName)
+            Write-UiMessage -UiKey "DownloadFail" -FormatArgs @($ApplicableAsset.AssetName)
         }
-        Write-UiMessage -UiKey "DownloadListItem" -FormatArgs @($BuildChoice.AppName, $BuildChoice.TargetFileName) -NoNewline
+        Write-UiMessage -UiKey "DownloadItem" -FormatArgs @($ApplicableAsset.AppName, $ApplicableAsset.AssetName) -NoNewline
         if ($IsSuccess) {
             Write-UiMessage -UiKey "StatusOk"
-            $BuildChoice
+            $ApplicableAsset
         } else {
             Write-UiMessage -UiKey "StatusFail"
         }
@@ -277,20 +277,20 @@ function Select-VerifiedDownload {
     param ([array]$Downloads)
 
     $VerifiedDownloads = foreach ($Download in $Downloads) {
-        Write-UiMessage -UiKey "VerifyFileList" -FormatArgs @($Download.TargetFileName)
-        $CalculatedFileHash = "sha256:$((Get-FileHash -Path $Download.FilePath -Algorithm SHA256).Hash.ToLower())"
-        Write-UiMessage -UiKey "VerifyFileItem" -FormatArgs @($CalculatedFileHash) -NoNewline
-        $IsHashMatched = if ([string]::IsNullOrEmpty($Download.Sha256Hash)) {
-            Write-UiMessage -UiKey "HashNA"
+        Write-UiMessage -UiKey "VerifyFile" -FormatArgs @($Download.AssetName)
+        $CalculatedDigest = "sha256:$((Get-FileHash -Path $Download.FilePath -Algorithm SHA256).Hash.ToLower())"
+        Write-UiMessage -UiKey "VerifyFileDigest" -FormatArgs @($CalculatedDigest) -NoNewline
+        $IsDigestMatched = if ([string]::IsNullOrEmpty($Download.Digest)) {
+            Write-UiMessage -UiKey "DigestNotProvided"
             $true
-        } elseif ($CalculatedFileHash -eq $Download.Sha256Hash) {
-            Write-UiMessage -UiKey "HashMatch"
+        } elseif ($CalculatedDigest -eq $Download.Digest) {
+            Write-UiMessage -UiKey "DigestMatch"
             $true
         } else {
-            Write-UiMessage -UiKey "HashMismatch"
+            Write-UiMessage -UiKey "DigestMismatch"
             $false
         }
-        if ($IsHashMatched) { $Download }
+        if ($IsDigestMatched) { $Download }
     }
     return @($VerifiedDownloads)
 }
@@ -299,7 +299,7 @@ function Get-FileCategory {
     param ([Parameter(Mandatory)] [string]$FileName)
 
     foreach ($Category in "Executable", "Archive") {
-        foreach ($Extension in $GlobalUpdateRules.FileTypes.$Category) {
+        foreach ($Extension in $SharedUpdateRules.FileTypes.$Category) {
             if ($FileName -like "*$Extension") { return $Category }
         }
     }
@@ -314,11 +314,11 @@ function Expand-ArchiveFile {
 }
 
 function Remove-PreviousInstallation {
-    Write-UiMessage -UiKey "Step51PreDeploy" -FormatArgs @($BaseDirectory)
+    Write-UiMessage -UiKey "RemovePreviousHeader" -FormatArgs @($BaseDirectory)
     $CurrentItems = @(Get-ChildItem -Path $BaseDirectory -Force)
     foreach ($CurrentItem in $CurrentItems) {
         if ($CurrentItem.FullName -eq $UpdateDirectory -or (Test-ExcludedItem -ItemName $CurrentItem.Name)) {
-            Write-UiMessage -UiKey "SkipExclude" -FormatArgs @($CurrentItem.Name)
+            Write-UiMessage -UiKey "SkipExcluded" -FormatArgs @($CurrentItem.Name)
             continue
         }
         Remove-Item -Path $CurrentItem.FullName -Recurse -Force
@@ -336,7 +336,7 @@ function Install-Executable {
     Move-Item -Path $SourcePath -Destination $DestinationPath -Force
     Write-UiMessage -UiKey "Moved" -FormatArgs @($FileName)
     (Get-Item -Path $DestinationPath).LastWriteTime = $Timestamp
-    Write-UiMessage -UiKey "TimestampSync" -FormatArgs @($Timestamp.ToString($TimestampFormat))
+    Write-UiMessage -UiKey "TimestampSet" -FormatArgs @($Timestamp.ToString($TimestampFormat))
 }
 
 function Install-ExtractedContent {
@@ -362,7 +362,7 @@ function Install-ExtractedContent {
     }
     foreach ($DeployItem in $DeployItems) {
         if (Test-ExcludedItem -ItemName $DeployItem.Name) {
-            Write-UiMessage -UiKey "SkipExclude" -FormatArgs @($DeployItem.Name)
+            Write-UiMessage -UiKey "SkipExcluded" -FormatArgs @($DeployItem.Name)
             continue
         }
         $DestinationItemPath = Join-Path -Path $BaseDirectory -ChildPath $DeployItem.Name
@@ -394,16 +394,16 @@ function Invoke-AppUpdate {
     } else {
         Write-UiMessage -UiKey "PartialUpdate"
     }
-    Write-UiMessage -UiKey "Step52Apply"
+    Write-UiMessage -UiKey "ApplyHeader"
     foreach ($VerifiedDownload in $VerifiedDownloads) {
-        Write-UiMessage -UiKey "ApplyList" -FormatArgs @($VerifiedDownload.FileCategory, $VerifiedDownload.TargetFileName)
+        Write-UiMessage -UiKey "ApplyItem" -FormatArgs @($VerifiedDownload.FileCategory, $VerifiedDownload.AssetName)
         if ($VerifiedDownload.FileCategory -eq "Executable") {
             Install-Executable -SourcePath $VerifiedDownload.FilePath -Timestamp $VerifiedDownload.PublishedAt
         } elseif ($VerifiedDownload.FileCategory -eq "Archive") {
             if (Expand-ArchiveFile -FilePath $VerifiedDownload.FilePath) {
-                Install-ExtractedContent -SourceDirectory (Split-Path -Path $VerifiedDownload.FilePath) -Filters $Apps.($VerifiedDownload.AppName).DeployFilters -FileName $VerifiedDownload.TargetFileName
+                Install-ExtractedContent -SourceDirectory (Split-Path -Path $VerifiedDownload.FilePath) -Filters $Apps.($VerifiedDownload.AppName).DeployFilters -FileName $VerifiedDownload.AssetName
             } else {
-                Write-UiMessage -UiKey "ExtractFail" -FormatArgs @($VerifiedDownload.TargetFileName)
+                Write-UiMessage -UiKey "ExtractFail" -FormatArgs @($VerifiedDownload.AssetName)
             }
         }
     }
@@ -411,13 +411,13 @@ function Invoke-AppUpdate {
 }
 
 function Remove-TemporaryDirectory {
-    param ([Parameter(Mandatory)] [array]$BuildChoices)
+    param ([Parameter(Mandatory)] [array]$ApplicableAssets)
 
-    $UniqueDirectories = @($BuildChoices | ForEach-Object { Join-Path -Path $UpdateDirectory -ChildPath $_.AppName } | Select-Object -Unique)
+    $UniqueDirectories = @($ApplicableAssets | ForEach-Object { Join-Path -Path $UpdateDirectory -ChildPath $_.AppName } | Select-Object -Unique)
     foreach ($DirectoryToRemove in $UniqueDirectories) {
         if (Test-Path -Path $DirectoryToRemove -PathType Container) {
             Remove-Item -Path $DirectoryToRemove -Recurse -Force
-            Write-UiMessage -UiKey "RemoveTempDir" -FormatArgs @(Split-Path -Path $DirectoryToRemove -Leaf)
+            Write-UiMessage -UiKey "RemovedTemporaryDirectory" -FormatArgs @(Split-Path -Path $DirectoryToRemove -Leaf)
         }
     }
 }
@@ -427,71 +427,71 @@ function Clear-AppCache {
 
     if ($Settings.AppCache.Clear -ne $true) { Write-UiMessage -UiKey "CacheClearOff"; return }
     if (-not $IsFullUpdate) {
-        if ($Settings.AppCache.ForceOnPartial -ne $true) { Write-UiMessage -UiKey "CacheClearSkip"; return }
-        Write-UiMessage -UiKey "CacheClearForce"
+        if ($Settings.AppCache.ClearOnPartialUpdate -ne $true) { Write-UiMessage -UiKey "CacheClearSkipped"; return }
+        Write-UiMessage -UiKey "CacheClearForced"
     }
     foreach ($AppCacheDirectory in $AppCacheDirectories) {
         if (Test-Path -Path $AppCacheDirectory -PathType Container) {
             Get-ChildItem -Path $AppCacheDirectory | Remove-Item -Recurse -Force
-            Write-UiMessage -UiKey "CacheClearDir" -FormatArgs @(Split-Path -Path $AppCacheDirectory -Leaf)
+            Write-UiMessage -UiKey "CacheCleared" -FormatArgs @(Split-Path -Path $AppCacheDirectory -Leaf)
         }
     }
 }
 
 # === Main ===
 
-# [Phase 0] Pre-Flight
-Assert-AppExecutable
+# [Phase 0] Validate configuration and paths
+Assert-ConfiguredExecutable
 Stop-RunningProcess
-Assert-RequiredPath -Path $BaseDirectory -PathType Container -UiKey "NoBaseDir"
-Assert-RequiredPath -Path $UpdateDirectory -PathType Container -UiKey "NoUpdateDir"
+Assert-RequiredPath -Path $BaseDirectory -PathType Container -UiKey "NoBaseDirectory"
+Assert-RequiredPath -Path $UpdateDirectory -PathType Container -UiKey "NoUpdateDirectory"
 Assert-RequiredPath -Path $TarExecutablePath -PathType Leaf -UiKey "NoTar"
 
 # [Phase 1] Flatten Update Targets
 $UpdateTargets = @(foreach ($AppProperty in $Apps.PSObject.Properties) {
     foreach ($UpdateTarget in $AppProperty.Value.UpdateTargets) {
         [PSCustomObject]@{
-            Pin     = $UpdateTarget.Pin -eq $true
-            Path    = $UpdateTarget.Path
-            AppName = $AppProperty.Name
-            Filter  = $UpdateTarget.Filter
-            Force   = $UpdateTarget.Force -eq $true
+            Preferred   = $UpdateTarget.Preferred -eq $true
+            Repository  = $UpdateTarget.Repository
+            AppName     = $AppProperty.Name
+            AssetFilter = $UpdateTarget.AssetFilter
+            Force       = $UpdateTarget.Force -eq $true
         }
     }
 })
 
 # [Phase 2] Fetch Release Metadata
-Write-UiMessage -UiKey "Step1MetaData"
+Write-UiMessage -UiKey "StepFetchMetadata"
 $ReleaseMetadata = Get-ReleaseMetadata -UpdateTargets $UpdateTargets
-if ($ReleaseMetadata.Count -eq 0) { Write-UiMessage -UiKey "NoMetaData"; Exit-WithMessage -Fail }
-Write-UiMessage -UiKey "FetchList"
-$ReleaseMetadata | Select-Object -Property RepositoryPath, PublishedAt -Unique | ForEach-Object {
-    Write-UiMessage -UiKey "FetchItem" -FormatArgs @($_.RepositoryPath, $_.PublishedAt.ToString($TimestampFormat))
+if ($ReleaseMetadata.Count -eq 0) { Write-UiMessage -UiKey "NoMetadata"; Exit-WithMessage -Fail }
+Write-UiMessage -UiKey "FetchedRepositories"
+$ReleaseMetadata | Select-Object -Property Repository, PublishedAt -Unique | ForEach-Object {
+    Write-UiMessage -UiKey "FetchedRepositoryItem" -FormatArgs @($_.Repository, $_.PublishedAt.ToString($TimestampFormat))
 }
 
 # [Phase 3] Select Update Targets
-Write-UiMessage -UiKey "Step2Comparison"
-$Candidates = Select-LatestBuildCandidate -ReleaseMetadata $ReleaseMetadata -UpdateTargets $UpdateTargets
-$BuildChoices = Select-BuildChoice -Candidates $Candidates
-if ($BuildChoices.Count -eq 0) { Write-UiMessage -UiKey "NoUpdateRequired"; Exit-WithMessage -Success }
+Write-UiMessage -UiKey "StepSelectAssets"
+$Candidates = Select-LatestAsset -ReleaseMetadata $ReleaseMetadata -UpdateTargets $UpdateTargets
+$ApplicableAssets = Select-ApplicableAsset -Candidates $Candidates
+if ($ApplicableAssets.Count -eq 0) { Write-UiMessage -UiKey "NoUpdateRequired"; Exit-WithMessage -Success }
 
 # [Phase 4] Download, Verify & Deploy
-Write-UiMessage -UiKey "Step3Download"
-$Downloads = Invoke-FileDownload -BuildChoices $BuildChoices
-Write-UiMessage -UiKey "Step4Verification"
+Write-UiMessage -UiKey "StepDownload"
+$Downloads = Invoke-FileDownload -ApplicableAssets $ApplicableAssets
+Write-UiMessage -UiKey "StepVerify"
 $VerifiedDownloads = @(Select-VerifiedDownload -Downloads $Downloads)
 if ($VerifiedDownloads.Count -eq 0) {
-    Write-UiMessage -UiKey "NoVerifiedBuilds"
-    Write-UiMessage -UiKey "Step6TempClear"
-    Remove-TemporaryDirectory -BuildChoices $BuildChoices
+    Write-UiMessage -UiKey "NoVerifiedAssets"
+    Write-UiMessage -UiKey "StepCleanTemporary"
+    Remove-TemporaryDirectory -ApplicableAssets $ApplicableAssets
     Write-UiMessage -UiKey "DownloadAllFail"
     Exit-WithMessage -Fail
 }
-Write-UiMessage -UiKey "Step5Deploy"
+Write-UiMessage -UiKey "StepDeploy"
 $IsFullUpdate = Invoke-AppUpdate -VerifiedDownloads $VerifiedDownloads
-Write-UiMessage -UiKey "Step6TempClear"
-Remove-TemporaryDirectory -BuildChoices $BuildChoices
-Write-UiMessage -UiKey "Step7CacheClear"
+Write-UiMessage -UiKey "StepCleanTemporary"
+Remove-TemporaryDirectory -ApplicableAssets $ApplicableAssets
+Write-UiMessage -UiKey "StepCleanCache"
 Clear-AppCache -IsFullUpdate $IsFullUpdate
 if ($Settings.StartMenu.Create -eq $true) {
     $StartMenuScript = Join-Path -Path $PSScriptRoot -ChildPath $Settings.StartMenu.Script
@@ -499,5 +499,5 @@ if ($Settings.StartMenu.Create -eq $true) {
         & $StartMenuScript
     }
 }
-Write-UiMessage -UiKey "ProcessDone"
+Write-UiMessage -UiKey "RunComplete"
 Exit-WithMessage -Success
