@@ -18,14 +18,23 @@ function Import-JsonFile {
     }
 }
 
+function Resolve-DeletablePath {
+    param ([Parameter(Mandatory)] [string]$Path)
+
+    $ExpandedPath = [System.IO.Path]::GetFullPath([Environment]::ExpandEnvironmentVariables($Path))
+    $RootPath = [System.IO.Path]::GetPathRoot($ExpandedPath)
+    if ($ExpandedPath.Length -le $RootPath.Length) { return $ExpandedPath }
+    return $ExpandedPath.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+}
+
 $Settings = Import-JsonFile -FilePath (Join-Path -Path $PSScriptRoot -ChildPath "settings.json")
 $UiTemplates = Import-JsonFile -FilePath (Join-Path -Path $PSScriptRoot -ChildPath "ui_templates.json")
 
 $Apps = $Settings.Apps
 $GlobalUpdateRules = $Settings.GlobalUpdateRules
-$BaseDirectory = [Environment]::ExpandEnvironmentVariables($Settings.Environment.Paths.BaseDirectory)
-$UpdateDirectory = [Environment]::ExpandEnvironmentVariables($Settings.Environment.Paths.UpdateDirectory)
-$AppCacheDirectories = @($Settings.Environment.Paths.AppCacheDirectories) | ForEach-Object { [Environment]::ExpandEnvironmentVariables($_) }
+$BaseDirectory = Resolve-DeletablePath -Path $Settings.Environment.Paths.BaseDirectory
+$UpdateDirectory = Resolve-DeletablePath -Path $Settings.Environment.Paths.UpdateDirectory
+$AppCacheDirectories = @($Settings.Environment.Paths.AppCacheDirectories) | ForEach-Object { Resolve-DeletablePath -Path $_ }
 $TarExecutablePath = [Environment]::ExpandEnvironmentVariables($Settings.Environment.TarExecutablePath)
 $ErrorActionPreference = $Settings.ErrorActionPreference
 $ProgressPreference = $Settings.ProgressPreference
