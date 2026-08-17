@@ -1,10 +1,7 @@
 {
     "Paths": {
         "BaseDirectory": "%LOCALAPPDATA%\\mpv",
-        "UpdateDirectory": "%LOCALAPPDATA%\\mpv\\update",
-        "AppCacheDirectories": [
-            "%LOCALAPPDATA%\\mpv\\cache"
-        ]
+        "UpdateDirectory": "%LOCALAPPDATA%\\mpv\\update"
     },
     "UpdateRules": {
         "VersionComparison": {
@@ -44,7 +41,10 @@
     },
     "AppCache": {
         "Clear": true,
-        "ClearOnPartialUpdate": false
+        "ClearOnPartialUpdate": false,
+        "Directories": [
+            "%LOCALAPPDATA%\\mpv\\cache"
+        ]
     },
     "StartMenu": {
         "Create": false,

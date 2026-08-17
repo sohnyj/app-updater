@@ -33,7 +33,7 @@ $Apps = $Settings.Apps
 $UpdateRules = $Settings.UpdateRules
 $BaseDirectory = Resolve-ConfiguredPath -Path $Settings.Paths.BaseDirectory
 $UpdateDirectory = Resolve-ConfiguredPath -Path $Settings.Paths.UpdateDirectory
-$AppCacheDirectories = @($Settings.Paths.AppCacheDirectories) | ForEach-Object { Resolve-ConfiguredPath -Path $_ }
+$AppCacheDirectories = @($Settings.AppCache.Directories) | ForEach-Object { Resolve-ConfiguredPath -Path $_ }
 $TarExecutablePath = Join-Path -Path $env:SystemRoot -ChildPath "System32\tar.exe"
 
 $ErrorActionPreference = $Settings.ErrorActionPreference

@@ -42,7 +42,7 @@ With no local executable, date comparison is skipped and the latest release inst
 ## settings.json
 
 > [!CAUTION]
-> A full update deletes everything in `BaseDirectory` except `UpdateDirectory` and `ExcludedNames` matches. `AppCache.Clear` also wipes `AppCacheDirectories`. ***Incorrect paths may cause data loss.***
+> A full update deletes everything in `BaseDirectory` except `UpdateDirectory` and `ExcludedNames` matches. `AppCache.Clear` also wipes `AppCache.Directories`. ***Incorrect paths may cause data loss.***
 
 ### `Paths`
 
@@ -50,7 +50,6 @@ With no local executable, date comparison is skipped and the latest release inst
 |-----|-------------|
 | `BaseDirectory` | App install path |
 | `UpdateDirectory` | Script and temp path. Skipped by the full-update deletion |
-| `AppCacheDirectories` | Cache directories emptied after update |
 
 ### `UpdateRules`
 
@@ -88,7 +87,8 @@ With no local executable, date comparison is skipped and the latest release inst
 
 | Key | Description |
 |-----|-------------|
-| `AppCache.Clear` | Clear `AppCacheDirectories` on full update |
+| `AppCache.Directories` | Cache directories emptied after update |
+| `AppCache.Clear` | Clear them on full update |
 | `AppCache.ClearOnPartialUpdate` | Clear on partial updates too |
 | `ErrorActionPreference` | PowerShell error handling (`Continue` / `Stop`) |
 | `ProgressPreference` | Progress bar visibility (`SilentlyContinue` to hide) |
