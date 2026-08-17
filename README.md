@@ -36,8 +36,9 @@ With no local executable, date comparison is skipped and the latest release inst
 3. **Select targets**: release dates against local timestamps
 4. **Download**: fetch selected assets
 5. **Verify**: SHA256 against `digest`; `[NONE]` when absent, skip on mismatch
-6. **Deploy**: extract archives, move files in
-7. **Cleanup**: remove temp directories, optionally clear cache
+6. **Extract**: unpack archives in the temp directory
+7. **Deploy**: remove the previous install if full, then move files in
+8. **Cleanup**: remove the download directory, optionally clear cache
 
 ## settings.json
 
@@ -49,7 +50,7 @@ With no local executable, date comparison is skipped and the latest release inst
 | Key | Description |
 |-----|-------------|
 | `BaseDirectory` | App install path |
-| `UpdateDirectory` | Script and temp path. Skipped by the full-update deletion |
+| `UpdateDirectory` | Script path; downloads land in `download\` under it. Skipped by the full-update deletion |
 
 ### `UpdateRules`
 
