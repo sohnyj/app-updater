@@ -31,13 +31,13 @@ Run once, then double-click `update.lnk`.
 
 With no local executable, date comparison is skipped and the latest release installs.
 
-1. **Validate**: stop running apps, check paths and tools
+1. **Validate**: check paths, stop running apps
 2. **Fetch metadata**: latest release info from GitHub
 3. **Select targets**: release dates against local timestamps
 4. **Download**: fetch selected assets
 5. **Verify**: SHA256 against `digest`; `[NONE]` when absent, skip on mismatch
 6. **Extract**: unpack archives in the temp directory
-7. **Deploy**: remove the previous install if full, then move files in
+7. **Install**: remove the previous install if full, then move files in
 8. **Cleanup**: remove the download directory, optionally clear cache
 
 ## settings.json
@@ -56,10 +56,10 @@ With no local executable, date comparison is skipped and the latest release inst
 
 | Key | Description |
 |-----|-------------|
-| `VersionComparison.ForceUpdate` | Update regardless of date |
-| `VersionComparison.LocalTimestampOffsetMinutes` | Minutes added to local `LastWriteTime`, offsetting the build-to-publish gap |
-| `FileTypes.Executable` | Deployed as a single file; `LastWriteTime` set to the release date |
-| `FileTypes.Archive` | Extracted before deploy; original `LastWriteTime` kept. Compressed tarballs unpack in one pass |
+| `ForceUpdate` | Update regardless of date |
+| `LocalTimestampOffsetMinutes` | Minutes added to local `LastWriteTime`, offsetting the build-to-publish gap |
+| `AssetTypes.Executable` | Installed as a single file; `LastWriteTime` set to the release date |
+| `AssetTypes.Archive` | Extracted before install; original `LastWriteTime` kept. Compressed tarballs unpack in one pass |
 | `ExcludedNames` | Names kept during full-update deletion (exact match) |
 | `ApiEndpoint` | GitHub release API endpoint |
 | `ApiToken` | For the metadata request. Empty = 60 req/hour, set = 5000. Not used for downloads |
@@ -73,7 +73,7 @@ With no local executable, date comparison is skipped and the latest release inst
 |-----|-------------|
 | `Executable` | Name used to read `LastWriteTime` |
 | `UpdateTargets` | Repository and asset filter pairs |
-| `DeployFilters` | Items to deploy from an archive. Empty = all |
+| `InstallFilters` | Items to install from an archive. Empty = all |
 
 ### `UpdateTargets`
 
@@ -88,8 +88,10 @@ With no local executable, date comparison is skipped and the latest release inst
 
 | Key | Description |
 |-----|-------------|
-| `AppCache.Directories` | Cache directories emptied after update |
 | `AppCache.Clear` | Clear them on full update |
 | `AppCache.ClearOnPartialUpdate` | Clear on partial updates too |
+| `AppCache.Directories` | Cache directories emptied after update |
+| `StartMenu.Create` | Run the Start Menu script after a successful update |
+| `StartMenu.Script` | Script file name, resolved beside the updater |
 | `ErrorActionPreference` | PowerShell error handling (`Continue` / `Stop`) |
 | `ProgressPreference` | Progress bar visibility (`SilentlyContinue` to hide) |

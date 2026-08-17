@@ -4,11 +4,9 @@
         "UpdateDirectory": "%LOCALAPPDATA%\\mpv\\update"
     },
     "UpdateRules": {
-        "VersionComparison": {
-            "ForceUpdate": false,
-            "LocalTimestampOffsetMinutes": 60
-        },
-        "FileTypes": {
+        "ForceUpdate": false,
+        "LocalTimestampOffsetMinutes": 60,
+        "AssetTypes": {
             "Executable": [".exe"],
             "Archive": [".7z", ".zip", ".tgz", ".tar.gz"]
         },
@@ -22,21 +20,21 @@
             "UpdateTargets": [
                 { "Preferred": false, "Force": false, "Repository": "sohnyj/minimal-mpv-winbuild", "AssetFilter": "mpv-x86_64-v3" }
             ],
-            "DeployFilters": ["mpv", "mpv.com", "mpv.exe"]
+            "InstallFilters": ["mpv", "mpv.com", "mpv.exe"]
         },
         "ffmpeg": {
             "Executable": "ffmpeg.exe",
             "UpdateTargets": [
                 { "Preferred": false, "Force": false, "Repository": "sohnyj/minimal-mpv-winbuild", "AssetFilter": "ffmpeg-x86_64-v3" }
             ],
-            "DeployFilters": []
+            "InstallFilters": []
         },
         "yt-dlp": {
             "Executable": "yt-dlp.exe",
             "UpdateTargets": [
                 { "Preferred": false, "Force": false, "Repository": "yt-dlp/yt-dlp-nightly-builds", "AssetFilter": "yt-dlp.exe" }
             ],
-            "DeployFilters": []
+            "InstallFilters": []
         }
     },
     "AppCache": {
