@@ -13,16 +13,16 @@ Scripts are app-agnostic. For another app, copy the folder with its own `setting
 1. Click **Code** > **Download ZIP**
 2. Extract to `%LOCALAPPDATA%\{APPNAME}\update`
 
-## app_updater_shortcut.ps1
+## shortcut.ps1
 
-Creates `update.lnk` in `BaseDirectory`, launching `app_updater.ps1` via `powershell.exe -ExecutionPolicy Bypass`.
+Creates `update.lnk` in `BaseDirectory`, launching `updater.ps1` via `powershell.exe -ExecutionPolicy Bypass`.
 
 Windows blocks `.ps1` on double-click; the shortcut works around it.
 
 **Usage:**
 
 ```powershell
-powershell.exe -ExecutionPolicy Bypass -File .\app_updater_shortcut.ps1
+powershell.exe -ExecutionPolicy Bypass -File .\shortcut.ps1
 ```
 
 Run once, then double-click `update.lnk`.

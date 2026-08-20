@@ -1,7 +1,7 @@
-# Usage: powershell.exe -ExecutionPolicy Bypass -File .\app_updater_shortcut.ps1
+# Usage: powershell.exe -ExecutionPolicy Bypass -File .\shortcut.ps1
 
 $BaseDirectory = Join-Path $env:LOCALAPPDATA "mpv"
-$ScriptFileName = "app_updater.ps1"
+$ScriptFileName = "updater.ps1"
 $ScriptPath = Join-Path $BaseDirectory "update\$ScriptFileName"
 $ShortcutPath = Join-Path $BaseDirectory "update.lnk"
 

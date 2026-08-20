@@ -27,7 +27,7 @@ function Resolve-ConfiguredPath {
 }
 
 $Settings = Import-JsonFile -FilePath (Join-Path -Path $PSScriptRoot -ChildPath "settings.json")
-$UiTemplates = Import-JsonFile -FilePath (Join-Path -Path $PSScriptRoot -ChildPath "ui_templates.json")
+$UiTemplates = Import-JsonFile -FilePath (Join-Path -Path $PSScriptRoot -ChildPath "ui.json")
 
 $Apps = $Settings.Apps
 $UpdateRules = $Settings.UpdateRules

@@ -46,7 +46,7 @@
     },
     "StartMenu": {
         "Create": false,
-        "Script": "app_startmenu_shortcut.ps1"
+        "Script": "startmenu.ps1"
     },
     "ErrorActionPreference": "Continue",
     "ProgressPreference": "SilentlyContinue"
