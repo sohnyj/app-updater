@@ -1,8 +1,7 @@
 # Usage: powershell.exe -ExecutionPolicy Bypass -File .\shortcut.ps1
 
 $BaseDirectory = Join-Path $env:LOCALAPPDATA "mpv"
-$ScriptFileName = "updater.ps1"
-$ScriptPath = Join-Path $BaseDirectory "update\$ScriptFileName"
+$ScriptPath = Join-Path $BaseDirectory "update\updater.ps1"
 $ShortcutPath = Join-Path $BaseDirectory "update.lnk"
 
 $Shell = New-Object -ComObject WScript.Shell

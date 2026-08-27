@@ -1,16 +1,17 @@
 # Usage: powershell.exe -ExecutionPolicy Bypass -File .\startmenu.ps1
 
 $BaseDirectory = Join-Path $env:LOCALAPPDATA "mpv"
+$ExecutablePath = Join-Path $BaseDirectory "mpv.exe"
 $UserStartMenuPath = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs"
 $ShortcutPath = Join-Path $UserStartMenuPath "mpv.lnk"
 
 $Shell = New-Object -ComObject WScript.Shell
 $Shortcut = $Shell.CreateShortcut($ShortcutPath)
 
-$Shortcut.TargetPath = Join-Path $BaseDirectory "mpv.exe"
+$Shortcut.TargetPath = $ExecutablePath
 $Shortcut.WorkingDirectory = $BaseDirectory
 $Shortcut.Description = "mpv"
-$Shortcut.IconLocation = "$(Join-Path $BaseDirectory 'mpv.exe'), 0"
+$Shortcut.IconLocation = "$ExecutablePath, 0"
 $Shortcut.Save()
 
 Write-Host "`n [I] Start Menu Path: $ShortcutPath" -ForegroundColor Gray
