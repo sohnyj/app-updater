@@ -2,7 +2,7 @@
 
 Updates local apps from GitHub Releases. Configured through `settings.json`.
 
-Scripts are app-agnostic. For another app, copy the folder with its own `settings.json`.
+`updater.ps1` is app-agnostic. For another app, copy the folder with its own `settings.json`. The shortcut scripts (`shortcut.ps1`, `startmenu.ps1`) are hardcoded for mpv.
 
 ## Requirements
 

@@ -3,7 +3,7 @@
     "AppRunningItem"          : { "Template": "     [I] {0}", "Color": "DarkYellow" },
     "AppContinuePrompt"       : { "Template": "\n [?] Force close and continue? [y/N]: ", "Color": "Red" },
     "UserCancel"              : { "Template": "\n [!] Canceled.", "Color": "Gray" },
-    "ProceedUpdate"           : { "Template": "\n [I] Processes stopped.", "Color": "DarkCyan" },
+    "ProcessesStopped"        : { "Template": "\n [I] Processes stopped.", "Color": "DarkCyan" },
     "NoBaseDirectory"         : { "Template": "\n [X] Base directory not found: {0}", "Color": "Red" },
     "NoUpdateDirectory"       : { "Template": "\n [X] Update directory not found: {0}", "Color": "Red" },
     "ApiRateLimitError"       : { "Template": "\n [X] GitHub API rate limit exceeded.", "Color": "Red" },
