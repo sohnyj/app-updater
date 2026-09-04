@@ -23,12 +23,14 @@ class UpdateFailure : System.Exception {
 class UpdateTarget {
     [string]$Repository
     [string]$AssetFilter
+    [string]$FilterPattern
     [bool]$Preferred
     [bool]$Force
 
     UpdateTarget([PSCustomObject]$Definition) {
         $this.Repository = $Definition.Repository
-        $this.AssetFilter = $Definition.AssetFilter
+        $this.AssetFilter = [string]$Definition.AssetFilter
+        $this.FilterPattern = if ($this.AssetFilter.Contains('*')) { $this.AssetFilter } else { "*$($this.AssetFilter)*" }
         $this.Preferred = [bool]$Definition.Preferred
         $this.Force = [bool]$Definition.Force
     }
@@ -71,6 +73,16 @@ class Release {
         $this.Repository = $Repository
         $this.PublishedAt = $PublishedAt
         $this.Assets = @(foreach ($ApiAsset in $ApiAssets) { [ReleaseAsset]::new($ApiAsset) })
+    }
+}
+
+class RunningProcess {
+    [App]$App
+    [System.Diagnostics.Process]$Process
+
+    RunningProcess([App]$App, [System.Diagnostics.Process]$Process) {
+        $this.App = $App
+        $this.Process = $Process
     }
 }
 
@@ -199,14 +211,14 @@ function Stop-RunningProcess {
                 -not (Test-PathUnderDirectory -Path $Process.Path -Directory $BaseDirectory)) {
                 continue
             }
-            [PSCustomObject]@{ AppName = $App.Name; Process = $Process }
+            [RunningProcess]::new($App, $Process)
         }
     })
     if ($RunningProcesses.Count -gt 0) {
         [System.Media.SystemSounds]::Beep.Play()
         Write-UiMessage -UiKey "AppRunning"
         foreach ($RunningProcess in $RunningProcesses) {
-            Write-UiMessage -UiKey "AppRunningItem" -FormatArgs @($RunningProcess.AppName)
+            Write-UiMessage -UiKey "AppRunningItem" -FormatArgs @($RunningProcess.App.Name)
         }
         Write-UiMessage -UiKey "AppContinuePrompt" -NoNewline
         $UserChoice = Read-Host
@@ -227,13 +239,12 @@ function Get-Release {
     if (-not [string]::IsNullOrEmpty($Settings.Api.Token)) {
         $RequestHeaders["Authorization"] = "Bearer $($Settings.Api.Token)"
     }
-    $Releases = [ordered]@{}
-    foreach ($Repository in $Repositories) {
+    return @(foreach ($Repository in $Repositories) {
         try {
             $ApiEndpointUri = $Settings.Api.Endpoint -f $Repository
             $ApiResponse = Invoke-RestMethod -Uri $ApiEndpointUri -TimeoutSec 15 -Headers $RequestHeaders
             $PublishedAt = ([DateTime]::Parse($ApiResponse.published_at, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AssumeUniversal)).ToLocalTime()
-            $Releases[$Repository] = [Release]::new($Repository, $PublishedAt, $ApiResponse.assets)
+            [Release]::new($Repository, $PublishedAt, $ApiResponse.assets)
         } catch {
             $StatusCode = if ($_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { 0 }
             if ($StatusCode -eq 401) {
@@ -244,8 +255,7 @@ function Get-Release {
                 Write-UiMessage -UiKey "ApiRequestError" -FormatArgs @($Repository, $_.Exception.Message)
             }
         }
-    }
-    return $Releases
+    })
 }
 
 function Get-AssetType {
@@ -261,7 +271,7 @@ function Get-AssetType {
 function Select-LatestAsset {
     param (
         [Parameter(Mandatory)] [App[]]$Apps,
-        [Parameter(Mandatory)] [System.Collections.IDictionary]$Releases
+        [Parameter(Mandatory)] [Release[]]$Releases
     )
 
     return @(foreach ($App in $Apps) {
@@ -270,19 +280,12 @@ function Select-LatestAsset {
                 Write-UiMessage -UiKey "EmptyAssetFilter" -FormatArgs @($Target.Repository, $App.Name)
                 continue
             }
-            $FilterPattern = if ($Target.AssetFilter.Contains('*')) {
-                $Target.AssetFilter
-            } else {
-                "*$($Target.AssetFilter)*"
-            }
-            $Release = $Releases[$Target.Repository]
-            $TargetAssets = @(if ($null -ne $Release) {
-                foreach ($ReleaseAsset in $Release.Assets) {
-                    if ($ReleaseAsset.Name -notlike $FilterPattern) { continue }
-                    $Type = Get-AssetType -AssetName $ReleaseAsset.Name
-                    if ($null -eq $Type) { continue }
-                    [SelectedAsset]::new($App, $Target, $Release.PublishedAt, $ReleaseAsset, $Type, $DownloadDirectory)
-                }
+            $Release = $Releases | Where-Object { $_.Repository -eq $Target.Repository }
+            $TargetAssets = @(foreach ($ReleaseAsset in $Release.Assets) {
+                if ($ReleaseAsset.Name -notlike $Target.FilterPattern) { continue }
+                $Type = Get-AssetType -AssetName $ReleaseAsset.Name
+                if ($null -eq $Type) { continue }
+                [SelectedAsset]::new($App, $Target, $Release.PublishedAt, $ReleaseAsset, $Type, $DownloadDirectory)
             })
             if ($TargetAssets.Count -eq 0) {
                 Write-UiMessage -UiKey "AssetNotFound" -FormatArgs @($Target.Repository, $Target.AssetFilter)
@@ -292,7 +295,7 @@ function Select-LatestAsset {
         if ($MatchedAssets.Count -eq 0) { continue }
         $PreferredAssets = @($MatchedAssets | Where-Object { $_.Target.Preferred })
         $EligibleAssets = if ($PreferredAssets.Count -gt 0) { $PreferredAssets } else { $MatchedAssets }
-        $EligibleAssets | Sort-Object -Property { $_.PublishedAt } -Descending | Select-Object -First 1
+        $EligibleAssets | Sort-Object -Property PublishedAt -Descending | Select-Object -First 1
     })
 }
 
@@ -553,7 +556,7 @@ function Invoke-Update {
     $Releases = Get-Release -Repositories $Repositories
     if ($Releases.Count -eq 0) { throw [UpdateFailure]::new("NoMetadata") }
     Write-UiMessage -UiKey "FetchedRepositories"
-    foreach ($Release in $Releases.Values) {
+    foreach ($Release in $Releases) {
         Write-UiMessage -UiKey "FetchedRepositoryItem" -FormatArgs @($Release.Repository, $Release.PublishedAt)
     }
 
