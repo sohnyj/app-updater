@@ -2,8 +2,8 @@
 
 $BaseDirectory = Join-Path $env:LOCALAPPDATA "mpv"
 $ExecutablePath = Join-Path $BaseDirectory "mpv.exe"
-$UserStartMenuPath = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs"
-$ShortcutPath = Join-Path $UserStartMenuPath "mpv.lnk"
+$StartMenuPath = Join-Path $env:APPDATA "Microsoft\Windows\Start Menu\Programs"
+$ShortcutPath = Join-Path $StartMenuPath "mpv.lnk"
 
 $Shell = New-Object -ComObject WScript.Shell
 $Shortcut = $Shell.CreateShortcut($ShortcutPath)

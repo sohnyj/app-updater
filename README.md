@@ -61,11 +61,16 @@ With no local executable, date comparison is skipped and the latest release inst
 | `AssetTypes.Executable` | Installed as a single file; `LastWriteTime` set to the release date |
 | `AssetTypes.Archive` | Extracted before install; original `LastWriteTime` kept. Compressed tarballs unpack in one pass |
 | `ExcludedNames` | Names kept during full-update deletion (exact match) |
-| `ApiEndpoint` | GitHub release API endpoint |
-| `ApiToken` | For the metadata request. Empty = 60 req/hour, set = 5000. Not used for downloads |
+
+### `Api`
+
+| Key | Description |
+|-----|-------------|
+| `Endpoint` | GitHub release API endpoint |
+| `Token` | For the metadata request. Empty = 60 req/hour, set = 5000. Not used for downloads |
 
 > [!NOTE]
-> `ApiToken` is plain text. Never commit one. Public repositories need none; otherwise use a read-only, minimal-scope token.
+> `Token` is plain text. Never commit one. Public repositories need none; otherwise use a read-only, minimal-scope token.
 
 ### `Apps`
 
