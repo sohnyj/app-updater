@@ -652,7 +652,9 @@ $BaseDirectory = Resolve-ConfiguredPath -Path $Settings.Paths.BaseDirectory
 $UpdateDirectory = Resolve-ConfiguredPath -Path $Settings.Paths.UpdateDirectory
 $DownloadDirectory = Join-Path -Path $UpdateDirectory -ChildPath "download"
 $TarExecutablePath = Join-Path -Path $env:SystemRoot -ChildPath "System32\tar.exe"
-$AppCacheDirectories = @($Settings.AppCache.Directories | ForEach-Object { Resolve-ConfiguredPath -Path $_ })
+$AppCacheDirectories = @(foreach ($Directory in $Settings.AppCache.Directories) {
+    Resolve-ConfiguredPath -Path $Directory
+})
 $ErrorActionPreference = $Settings.ErrorActionPreference
 $ProgressPreference = $Settings.ProgressPreference
 
