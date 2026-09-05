@@ -337,7 +337,7 @@ function Select-ApplicableAsset {
         $PublishedAt = $UpdateAsset.PublishedAt
         $ThresholdTime = [DateTime]::MinValue
         $InstalledExecutable = Get-Item -Path $App.ExecutablePath -ErrorAction SilentlyContinue
-        if ($InstalledExecutable -is [System.IO.FileInfo]) {
+        if ($null -ne $InstalledExecutable) {
             $OffsetMinutes = $UpdateRules.LocalTimestampOffsetMinutes
             $ThresholdTime = $InstalledExecutable.LastWriteTime.AddMinutes($OffsetMinutes)
         }
@@ -484,10 +484,6 @@ function Install-ExtractedContent {
         $MovedUiKey = "MovedFiltered"
     }
     foreach ($InstallItem in $InstallItems) {
-        if (Test-ExcludedName -Name $InstallItem.Name) {
-            Write-UiMessage -UiKey "SkipExcluded" -FormatArgs $InstallItem.Name
-            continue
-        }
         $DestinationPath = Join-Path -Path $BaseDirectory -ChildPath $InstallItem.Name
         if (Test-Path -Path $DestinationPath) {
             Remove-Item -Path $DestinationPath -Recurse -Force -ErrorAction Stop
@@ -636,9 +632,7 @@ function Invoke-Update {
     Clear-AppCache -FullUpdate:$IsFullUpdate
     if ($Settings.StartMenu.Create) {
         $StartMenuScriptPath = Join-Path -Path $PSScriptRoot -ChildPath $Settings.StartMenu.Script
-        if (Test-Path -Path $StartMenuScriptPath -PathType Leaf) {
-            & $StartMenuScriptPath
-        }
+        & $StartMenuScriptPath
     }
     Write-UiMessage -UiKey "RunCompleted"
 }
