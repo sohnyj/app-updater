@@ -6,20 +6,6 @@ enum AssetType {
     Archive
 }
 
-class UpdateFailure : System.Exception {
-    [string]$UiKey
-    [object[]]$FormatArgs
-
-    UpdateFailure([string]$UiKey) : base($UiKey) {
-        $this.UiKey = $UiKey
-    }
-
-    UpdateFailure([string]$UiKey, [object[]]$FormatArgs) : base($UiKey) {
-        $this.UiKey = $UiKey
-        $this.FormatArgs = $FormatArgs
-    }
-}
-
 class UpdateTarget {
     [string]$Repository
     [string]$AssetFilter
@@ -30,7 +16,11 @@ class UpdateTarget {
     UpdateTarget([PSCustomObject]$Definition) {
         $this.Repository = $Definition.Repository
         $this.AssetFilter = [string]$Definition.AssetFilter
-        $this.FilterPattern = if ($this.AssetFilter.Contains('*')) { $this.AssetFilter } else { "*$($this.AssetFilter)*" }
+        $this.FilterPattern = if ($this.AssetFilter.Contains('*')) {
+            $this.AssetFilter
+        } else {
+            "*$($this.AssetFilter)*"
+        }
         $this.Preferred = [bool]$Definition.Preferred
         $this.Force = [bool]$Definition.Force
     }
@@ -52,12 +42,12 @@ class App {
     }
 }
 
-class ReleaseAsset {
+class Asset {
     [string]$Name
     [string]$DownloadUrl
     [string]$Digest
 
-    ReleaseAsset([PSCustomObject]$ApiAsset) {
+    Asset([PSCustomObject]$ApiAsset) {
         $this.Name = $ApiAsset.name
         $this.DownloadUrl = $ApiAsset.browser_download_url
         $this.Digest = $ApiAsset.digest
@@ -67,88 +57,101 @@ class ReleaseAsset {
 class Release {
     [string]$Repository
     [DateTime]$PublishedAt
-    [ReleaseAsset[]]$Assets
+    [Asset[]]$Assets
 
-    Release([string]$Repository, [DateTime]$PublishedAt, [object[]]$ApiAssets) {
+    Release([string]$Repository, [PSCustomObject]$ApiRelease) {
         $this.Repository = $Repository
-        $this.PublishedAt = $PublishedAt
-        $this.Assets = @(foreach ($ApiAsset in $ApiAssets) { [ReleaseAsset]::new($ApiAsset) })
+        $this.PublishedAt = [DateTime]::Parse(
+            $ApiRelease.published_at,
+            [System.Globalization.CultureInfo]::InvariantCulture,
+            [System.Globalization.DateTimeStyles]::AssumeUniversal
+        ).ToLocalTime()
+        $this.Assets = @(foreach ($ApiAsset in $ApiRelease.assets) { [Asset]::new($ApiAsset) })
     }
 }
 
-class RunningProcess {
+class AppProcess {
     [App]$App
     [System.Diagnostics.Process]$Process
 
-    RunningProcess([App]$App, [System.Diagnostics.Process]$Process) {
+    AppProcess([App]$App, [System.Diagnostics.Process]$Process) {
         $this.App = $App
         $this.Process = $Process
     }
 }
 
-class SelectedAsset {
+class UpdateAsset {
     [App]$App
     [UpdateTarget]$Target
     [DateTime]$PublishedAt
-    [ReleaseAsset]$ReleaseAsset
+    [Asset]$Asset
     [AssetType]$Type
-    [string]$AssetDirectory
+    [string]$DownloadDirectory
     [string]$FilePath
 
-    SelectedAsset([App]$App, [UpdateTarget]$Target, [DateTime]$PublishedAt, [ReleaseAsset]$ReleaseAsset, [AssetType]$Type, [string]$DownloadDirectory) {
+    UpdateAsset(
+        [App]$App,
+        [UpdateTarget]$Target,
+        [DateTime]$PublishedAt,
+        [Asset]$Asset,
+        [AssetType]$Type,
+        [string]$DownloadRootDirectory
+    ) {
         $this.App = $App
         $this.Target = $Target
         $this.PublishedAt = $PublishedAt
-        $this.ReleaseAsset = $ReleaseAsset
+        $this.Asset = $Asset
         $this.Type = $Type
-        $this.AssetDirectory = Join-Path -Path $DownloadDirectory -ChildPath $App.Name
-        $this.FilePath = Join-Path -Path $this.AssetDirectory -ChildPath $ReleaseAsset.Name
+        $this.DownloadDirectory = Join-Path -Path $DownloadRootDirectory -ChildPath $App.Name
+        $this.FilePath = Join-Path -Path $this.DownloadDirectory -ChildPath $Asset.Name
     }
 }
 
-# Configuration & Environment
+# Exception
+class UpdateException : System.Exception {
+    [string]$UiKey
+    [object[]]$FormatArgs
+
+    UpdateException([string]$UiKey) : base($UiKey) {
+        $this.UiKey = $UiKey
+    }
+
+    UpdateException([string]$UiKey, [object[]]$FormatArgs) : base($UiKey) {
+        $this.UiKey = $UiKey
+        $this.FormatArgs = $FormatArgs
+    }
+}
+
+# Configuration
 function Import-JsonFile {
+    [CmdletBinding()]
     param ([Parameter(Mandatory)] [string]$FilePath)
 
     if (-not (Test-Path -Path $FilePath -PathType Leaf)) {
-        Write-Host " [X] Not found: $FilePath" -ForegroundColor Red
-        $null = Read-Host
-        exit 1
+        throw "Not found: $FilePath"
     }
     try {
         return Get-Content -Path $FilePath -Raw | ConvertFrom-Json
     } catch {
-        Write-Host " [X] Failed to parse: $FilePath" -ForegroundColor Red
-        Write-Host "     $($_.Exception.Message)" -ForegroundColor Red
-        $null = Read-Host
-        exit 1
+        throw "Failed to parse: $FilePath ($($_.Exception.Message))"
     }
 }
 
 function Resolve-ConfiguredPath {
+    [CmdletBinding()]
     param ([Parameter(Mandatory)] [string]$Path)
 
     $ExpandedPath = [System.IO.Path]::GetFullPath([Environment]::ExpandEnvironmentVariables($Path))
     $RootPath = [System.IO.Path]::GetPathRoot($ExpandedPath)
     if ($ExpandedPath.Length -le $RootPath.Length) { return $ExpandedPath }
-    return $ExpandedPath.TrimEnd([System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar)
+    $Separators = [System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar
+    return $ExpandedPath.TrimEnd($Separators)
 }
 
-$Settings = Import-JsonFile -FilePath (Join-Path -Path $PSScriptRoot -ChildPath "settings.json")
-$UiTemplates = Import-JsonFile -FilePath (Join-Path -Path $PSScriptRoot -ChildPath "ui.json")
-
-$UpdateRules = $Settings.UpdateRules
-$BaseDirectory = Resolve-ConfiguredPath -Path $Settings.Paths.BaseDirectory
-$UpdateDirectory = Resolve-ConfiguredPath -Path $Settings.Paths.UpdateDirectory
-$TarExecutablePath = Join-Path -Path $env:SystemRoot -ChildPath "System32\tar.exe"
-$DownloadDirectory = Join-Path -Path $UpdateDirectory -ChildPath "download"
-$AppCacheDirectories = @($Settings.AppCache.Directories) | ForEach-Object { Resolve-ConfiguredPath -Path $_ }
-
-$ErrorActionPreference = $Settings.ErrorActionPreference
-$ProgressPreference = $Settings.ProgressPreference
-
-# Functions
+# Console
 function Write-UiMessage {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingWriteHost', '')]
+    [CmdletBinding()]
     param (
         [Parameter(Mandatory)] [string]$UiKey,
         [object[]]$FormatArgs,
@@ -156,34 +159,39 @@ function Write-UiMessage {
     )
 
     $UiTemplate = $UiTemplates.$UiKey
-    $DisplayText = if ($null -ne $FormatArgs -and $FormatArgs.Count -gt 0) {
-        $UiTemplate.Template -f $FormatArgs
-    } else {
-        $UiTemplate.Template
+    $DisplayText = $UiTemplate.Template
+    if ($null -ne $FormatArgs -and $FormatArgs.Count -gt 0) {
+        $DisplayText = $UiTemplate.Template -f $FormatArgs
     }
     Write-Host $DisplayText -ForegroundColor $UiTemplate.Color -NoNewline:$NoNewline
 }
 
-function Exit-WithMessage {
+function Exit-Script {
+    [CmdletBinding()]
     param ([switch]$Fail)
 
+    $ExitSound = [System.Media.SystemSounds]::Asterisk
+    $ExitCode = 0
     if ($Fail) {
-        [System.Media.SystemSounds]::Hand.Play()
-    } else {
-        [System.Media.SystemSounds]::Asterisk.Play()
+        $ExitSound = [System.Media.SystemSounds]::Hand
+        $ExitCode = 1
     }
+    $ExitSound.Play()
     Write-UiMessage -UiKey "PressEnterExit"
     $null = Read-Host
-    if ($Fail) { exit 1 } else { exit 0 }
+    exit $ExitCode
 }
 
+# Pipeline
 function Test-ExcludedName {
+    [CmdletBinding()]
     param ([Parameter(Mandatory)] [string]$Name)
 
     return $UpdateRules.ExcludedNames -contains $Name
 }
 
 function Test-PathUnderDirectory {
+    [CmdletBinding()]
     param (
         [Parameter(Mandatory)] [string]$Path,
         [Parameter(Mandatory)] [string]$Directory
@@ -194,45 +202,53 @@ function Test-PathUnderDirectory {
 }
 
 function Get-ConfiguredApp {
+    [CmdletBinding()]
+    param ()
+
     return @(foreach ($AppProperty in $Settings.Apps.PSObject.Properties) {
         if ([string]::IsNullOrEmpty($AppProperty.Value.Executable)) {
-            throw [UpdateFailure]::new("NoExecutable", @($AppProperty.Name))
+            throw [UpdateException]::new("NoExecutable", @($AppProperty.Name))
         }
         [App]::new($AppProperty.Name, $AppProperty.Value, $BaseDirectory)
     })
 }
 
-function Stop-RunningProcess {
-    param ([App[]]$Apps)
+function Get-AppProcess {
+    [CmdletBinding()]
+    param ([Parameter(Mandatory)] [AllowEmptyCollection()] [App[]]$Apps)
 
-    $RunningProcesses = @(foreach ($App in $Apps) {
+    return @(foreach ($App in $Apps) {
         foreach ($Process in @(Get-Process -Name $App.ProcessName -ErrorAction SilentlyContinue)) {
-            if ([string]::IsNullOrEmpty($Process.Path) -or
-                -not (Test-PathUnderDirectory -Path $Process.Path -Directory $BaseDirectory)) {
-                continue
-            }
-            [RunningProcess]::new($App, $Process)
+            if ([string]::IsNullOrEmpty($Process.Path)) { continue }
+            if (-not (Test-PathUnderDirectory -Path $Process.Path -Directory $BaseDirectory)) { continue }
+            [AppProcess]::new($App, $Process)
         }
     })
-    if ($RunningProcesses.Count -gt 0) {
-        [System.Media.SystemSounds]::Beep.Play()
-        Write-UiMessage -UiKey "AppRunning"
-        foreach ($RunningProcess in $RunningProcesses) {
-            Write-UiMessage -UiKey "AppRunningItem" -FormatArgs @($RunningProcess.App.Name)
-        }
-        Write-UiMessage -UiKey "AppContinuePrompt" -NoNewline
-        $UserChoice = Read-Host
-        if ($UserChoice -notmatch "^[yY]$") {
-            throw [UpdateFailure]::new("UserCancel")
-        }
-        foreach ($RunningProcess in $RunningProcesses) {
-            Stop-Process -Id $RunningProcess.Process.Id -Force
-        }
-        Write-UiMessage -UiKey "ProcessesStopped"
+}
+
+function Stop-AppProcess {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '')]
+    [CmdletBinding()]
+    param ([Parameter(Mandatory)] [AppProcess[]]$AppProcesses)
+
+    [System.Media.SystemSounds]::Beep.Play()
+    Write-UiMessage -UiKey "AppRunning"
+    foreach ($AppProcess in $AppProcesses) {
+        Write-UiMessage -UiKey "AppRunningItem" -FormatArgs $AppProcess.App.Name
     }
+    Write-UiMessage -UiKey "AppContinuePrompt" -NoNewline
+    $UserChoice = Read-Host
+    if ($UserChoice -notmatch "^[yY]$") {
+        throw [UpdateException]::new("UserCanceled")
+    }
+    foreach ($AppProcess in $AppProcesses) {
+        Stop-Process -Id $AppProcess.Process.Id -Force
+    }
+    Write-UiMessage -UiKey "ProcessesStopped"
 }
 
 function Get-Release {
+    [CmdletBinding()]
     param ([Parameter(Mandatory)] [string[]]$Repositories)
 
     $RequestHeaders = @{}
@@ -242,23 +258,26 @@ function Get-Release {
     return @(foreach ($Repository in $Repositories) {
         try {
             $ApiEndpointUri = $Settings.Api.Endpoint -f $Repository
-            $ApiResponse = Invoke-RestMethod -Uri $ApiEndpointUri -TimeoutSec 15 -Headers $RequestHeaders
-            $PublishedAt = ([DateTime]::Parse($ApiResponse.published_at, [System.Globalization.CultureInfo]::InvariantCulture, [System.Globalization.DateTimeStyles]::AssumeUniversal)).ToLocalTime()
-            [Release]::new($Repository, $PublishedAt, $ApiResponse.assets)
+            $ApiRelease = Invoke-RestMethod -Uri $ApiEndpointUri -TimeoutSec 15 -Headers $RequestHeaders
+            [Release]::new($Repository, $ApiRelease)
         } catch {
-            $StatusCode = if ($_.Exception.Response) { [int]$_.Exception.Response.StatusCode } else { 0 }
-            if ($StatusCode -eq 401) {
-                throw [UpdateFailure]::new("ApiTokenError")
-            } elseif ($StatusCode -eq 403 -or $StatusCode -eq 429) {
-                throw [UpdateFailure]::new("ApiRateLimitError")
-            } else {
-                Write-UiMessage -UiKey "ApiRequestError" -FormatArgs @($Repository, $_.Exception.Message)
+            $StatusCode = 0
+            if ($_.Exception.Response) {
+                $StatusCode = [int]$_.Exception.Response.StatusCode
             }
+            if ($StatusCode -eq 401) {
+                throw [UpdateException]::new("ApiTokenFail")
+            }
+            if ($StatusCode -eq 403 -or $StatusCode -eq 429) {
+                throw [UpdateException]::new("ApiRateLimitFail")
+            }
+            Write-UiMessage -UiKey "ApiRequestFail" -FormatArgs $Repository, $_.Exception.Message
         }
     })
 }
 
 function Get-AssetType {
+    [CmdletBinding()]
     param ([Parameter(Mandatory)] [string]$AssetName)
 
     foreach ($Type in [Enum]::GetValues([AssetType])) {
@@ -266,9 +285,11 @@ function Get-AssetType {
             if ($AssetName -like "*$Extension") { return $Type }
         }
     }
+    return $null
 }
 
-function Select-LatestAsset {
+function Select-CandidateAsset {
+    [CmdletBinding()]
     param (
         [Parameter(Mandatory)] [App[]]$Apps,
         [Parameter(Mandatory)] [Release[]]$Releases
@@ -277,143 +298,148 @@ function Select-LatestAsset {
     return @(foreach ($App in $Apps) {
         $MatchedAssets = @(foreach ($Target in $App.UpdateTargets) {
             if ([string]::IsNullOrEmpty($Target.AssetFilter)) {
-                Write-UiMessage -UiKey "EmptyAssetFilter" -FormatArgs @($Target.Repository, $App.Name)
+                Write-UiMessage -UiKey "EmptyAssetFilter" -FormatArgs $Target.Repository, $App.Name
                 continue
             }
             $Release = $Releases | Where-Object { $_.Repository -eq $Target.Repository }
-            $TargetAssets = @(foreach ($ReleaseAsset in $Release.Assets) {
-                if ($ReleaseAsset.Name -notlike $Target.FilterPattern) { continue }
-                $Type = Get-AssetType -AssetName $ReleaseAsset.Name
+            if ($null -eq $Release) { continue }
+            $TargetAssets = @(foreach ($Asset in $Release.Assets) {
+                if ($Asset.Name -notlike $Target.FilterPattern) { continue }
+                $Type = Get-AssetType -AssetName $Asset.Name
                 if ($null -eq $Type) { continue }
-                [SelectedAsset]::new($App, $Target, $Release.PublishedAt, $ReleaseAsset, $Type, $DownloadDirectory)
+                [UpdateAsset]::new($App, $Target, $Release.PublishedAt, $Asset, $Type, $DownloadDirectory)
             })
             if ($TargetAssets.Count -eq 0) {
-                Write-UiMessage -UiKey "AssetNotFound" -FormatArgs @($Target.Repository, $Target.AssetFilter)
+                Write-UiMessage -UiKey "NoTargetAsset" -FormatArgs $Target.Repository, $Target.AssetFilter
             }
             $TargetAssets
         })
         if ($MatchedAssets.Count -eq 0) { continue }
+        $EligibleAssets = $MatchedAssets
         $PreferredAssets = @($MatchedAssets | Where-Object { $_.Target.Preferred })
-        $EligibleAssets = if ($PreferredAssets.Count -gt 0) { $PreferredAssets } else { $MatchedAssets }
+        if ($PreferredAssets.Count -gt 0) {
+            $EligibleAssets = $PreferredAssets
+        }
         $EligibleAssets | Sort-Object -Property PublishedAt -Descending | Select-Object -First 1
     })
 }
 
 function Select-ApplicableAsset {
-    param ([Parameter(Mandatory)] [SelectedAsset[]]$Candidates)
+    [CmdletBinding()]
+    param ([Parameter(Mandatory)] [UpdateAsset[]]$UpdateAssets)
 
-    return @(foreach ($Candidate in $Candidates) {
-        $InstalledExecutable = Get-Item -Path $Candidate.App.ExecutablePath -ErrorAction SilentlyContinue
-        $ThresholdTime = if ($InstalledExecutable -is [System.IO.FileInfo]) {
-            $InstalledExecutable.LastWriteTime.AddMinutes($UpdateRules.LocalTimestampOffsetMinutes)
-        } else {
-            [DateTime]::MinValue
+    return @(foreach ($UpdateAsset in $UpdateAssets) {
+        $App = $UpdateAsset.App
+        $Target = $UpdateAsset.Target
+        $PublishedAt = $UpdateAsset.PublishedAt
+        $ThresholdTime = [DateTime]::MinValue
+        $InstalledExecutable = Get-Item -Path $App.ExecutablePath -ErrorAction SilentlyContinue
+        if ($InstalledExecutable -is [System.IO.FileInfo]) {
+            $OffsetMinutes = $UpdateRules.LocalTimestampOffsetMinutes
+            $ThresholdTime = $InstalledExecutable.LastWriteTime.AddMinutes($OffsetMinutes)
         }
-        $ShouldApply = $UpdateRules.ForceUpdate -or $Candidate.Target.Force -or
-                       $Candidate.PublishedAt -gt $ThresholdTime
-        if ($ShouldApply) {
-            Write-UiMessage -UiKey "SelectedAsset" -FormatArgs @($Candidate.App.Name, $Candidate.Target.Repository) -NoNewline
+        $IsApplicable = $UpdateRules.ForceUpdate -or $Target.Force -or $PublishedAt -gt $ThresholdTime
+        if ($IsApplicable) {
+            Write-UiMessage -UiKey "SelectedAsset" -FormatArgs $App.Name, $Target.Repository -NoNewline
         } else {
-            Write-UiMessage -UiKey "NoNewRelease" -FormatArgs @($Candidate.Target.Repository, $Candidate.PublishedAt) -NoNewline
+            Write-UiMessage -UiKey "NoNewRelease" -FormatArgs $Target.Repository, $PublishedAt -NoNewline
         }
-        if ($Candidate.Target.Preferred) { Write-UiMessage -UiKey "PreferredTag" -NoNewline }
-        if ($Candidate.Target.Force) { Write-UiMessage -UiKey "ForceTag" -NoNewline }
+        if ($Target.Preferred) { Write-UiMessage -UiKey "PreferredTag" -NoNewline }
+        if ($Target.Force) { Write-UiMessage -UiKey "ForceTag" -NoNewline }
         Write-UiMessage -UiKey "EndLine"
-        if ($ShouldApply) {
-            Write-UiMessage -UiKey "SelectedAssetItem" -FormatArgs @($Candidate.ReleaseAsset.Name, $Candidate.PublishedAt)
-            $Candidate
-        }
+        if (-not $IsApplicable) { continue }
+        Write-UiMessage -UiKey "SelectedAssetItem" -FormatArgs $UpdateAsset.Asset.Name, $PublishedAt
+        $UpdateAsset
     })
 }
 
-function Invoke-AssetDownload {
-    param ([Parameter(Mandatory)] [SelectedAsset[]]$ApplicableAssets)
+function Save-Asset {
+    [CmdletBinding()]
+    param ([Parameter(Mandatory)] [UpdateAsset[]]$UpdateAssets)
 
     if (Test-Path -Path $DownloadDirectory -PathType Container) {
         Remove-Item -Path $DownloadDirectory -Recurse -Force
     }
-    return @(foreach ($ApplicableAsset in $ApplicableAssets) {
-        New-Item -ItemType Directory -Path $ApplicableAsset.AssetDirectory -Force | Out-Null
-        $IsSuccess = $true
+    return @(foreach ($UpdateAsset in $UpdateAssets) {
+        $null = New-Item -ItemType Directory -Path $UpdateAsset.DownloadDirectory -Force
+        Write-UiMessage -UiKey "DownloadItem" -FormatArgs $UpdateAsset.App.Name, $UpdateAsset.Asset.Name -NoNewline
         try {
-            Invoke-WebRequest -Uri $ApplicableAsset.ReleaseAsset.DownloadUrl -OutFile $ApplicableAsset.FilePath -ErrorAction Stop
+            Invoke-WebRequest -Uri $UpdateAsset.Asset.DownloadUrl -OutFile $UpdateAsset.FilePath -ErrorAction Stop
         } catch {
-            $IsSuccess = $false
-            Write-UiMessage -UiKey "DownloadFail" -FormatArgs @($ApplicableAsset.ReleaseAsset.Name)
-        }
-        Write-UiMessage -UiKey "DownloadItem" -FormatArgs @($ApplicableAsset.App.Name, $ApplicableAsset.ReleaseAsset.Name) -NoNewline
-        if ($IsSuccess) {
-            Write-UiMessage -UiKey "StatusOk"
-            $ApplicableAsset
-        } else {
             Write-UiMessage -UiKey "StatusFail"
+            Write-UiMessage -UiKey "DownloadFail" -FormatArgs $_.Exception.Message
+            continue
         }
+        Write-UiMessage -UiKey "StatusOk"
+        $UpdateAsset
     })
 }
 
 function Select-VerifiedAsset {
-    param ([SelectedAsset[]]$DownloadedAssets)
+    [CmdletBinding()]
+    param ([Parameter(Mandatory)] [AllowEmptyCollection()] [UpdateAsset[]]$UpdateAssets)
 
-    return @(foreach ($DownloadedAsset in $DownloadedAssets) {
-        Write-UiMessage -UiKey "VerifyAsset" -FormatArgs @($DownloadedAsset.ReleaseAsset.Name)
-        $CalculatedDigest = "sha256:$((Get-FileHash -Path $DownloadedAsset.FilePath -Algorithm SHA256).Hash.ToLower())"
-        Write-UiMessage -UiKey "VerifyAssetDigest" -FormatArgs @($CalculatedDigest) -NoNewline
-        $IsDigestMatched = if ([string]::IsNullOrEmpty($DownloadedAsset.ReleaseAsset.Digest)) {
+    return @(foreach ($UpdateAsset in $UpdateAssets) {
+        Write-UiMessage -UiKey "VerifyItem" -FormatArgs $UpdateAsset.Asset.Name
+        $FileHash = Get-FileHash -Path $UpdateAsset.FilePath -Algorithm SHA256
+        $CalculatedDigest = "sha256:$($FileHash.Hash.ToLower())"
+        Write-UiMessage -UiKey "VerifyItemDigest" -FormatArgs $CalculatedDigest -NoNewline
+        if ([string]::IsNullOrEmpty($UpdateAsset.Asset.Digest)) {
             Write-UiMessage -UiKey "DigestNotProvided"
-            $true
-        } elseif ($CalculatedDigest -eq $DownloadedAsset.ReleaseAsset.Digest) {
+        } elseif ($CalculatedDigest -eq $UpdateAsset.Asset.Digest) {
             Write-UiMessage -UiKey "DigestMatch"
-            $true
         } else {
             Write-UiMessage -UiKey "DigestMismatch"
-            $false
+            continue
         }
-        if ($IsDigestMatched) { $DownloadedAsset }
+        $UpdateAsset
     })
 }
 
 function Expand-AssetArchive {
-    param ([Parameter(Mandatory)] [SelectedAsset[]]$VerifiedAssets)
+    [CmdletBinding()]
+    param ([Parameter(Mandatory)] [UpdateAsset[]]$UpdateAssets)
 
-    return @(foreach ($VerifiedAsset in $VerifiedAssets) {
-        if ($VerifiedAsset.Type -ne [AssetType]::Archive) {
-            $VerifiedAsset
-            continue
+    return @(foreach ($UpdateAsset in $UpdateAssets) {
+        if ($UpdateAsset.Type -eq [AssetType]::Archive) {
+            Write-UiMessage -UiKey "ExtractItem" -FormatArgs $UpdateAsset.Asset.Name
+            $null = & $TarExecutablePath -x -f $UpdateAsset.FilePath -C $UpdateAsset.DownloadDirectory
+            if ($LASTEXITCODE -ne 0) {
+                Write-UiMessage -UiKey "ExtractFail" -FormatArgs $UpdateAsset.Asset.Name
+                continue
+            }
         }
-        Write-UiMessage -UiKey "ExtractItem" -FormatArgs @($VerifiedAsset.ReleaseAsset.Name)
-        & $TarExecutablePath -x -f $VerifiedAsset.FilePath -C $VerifiedAsset.AssetDirectory | Out-Null
-        if ($LASTEXITCODE -eq 0) {
-            $VerifiedAsset
-        } else {
-            Write-UiMessage -UiKey "ExtractFail" -FormatArgs @($VerifiedAsset.ReleaseAsset.Name)
-        }
+        $UpdateAsset
     })
 }
 
 function Remove-InstalledContent {
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '')]
+    [CmdletBinding()]
     param ([Parameter(Mandatory)] [string]$Directory)
 
-    $FailureCount = 0
     try {
         $InstalledItems = @(Get-ChildItem -Path $Directory -Force -ErrorAction Stop)
     } catch {
-        Write-UiMessage -UiKey "RemoveFail" -FormatArgs @((Split-Path -Path $Directory -Leaf), $_.Exception.Message)
+        Write-UiMessage -UiKey "RemoveFail" -FormatArgs (Split-Path -Path $Directory -Leaf), $_.Exception.Message
         return 1
     }
+    $FailureCount = 0
     foreach ($InstalledItem in $InstalledItems) {
-        $RelativePath = $InstalledItem.FullName.Substring($BaseDirectory.Length + 1)
-        if ($InstalledItem.FullName -eq $UpdateDirectory -or (Test-ExcludedName -Name $InstalledItem.Name)) {
-            Write-UiMessage -UiKey "SkipExcluded" -FormatArgs @($RelativePath)
+        $ItemPath = $InstalledItem.FullName
+        $RelativePath = $ItemPath.Substring($BaseDirectory.Length + 1)
+        if ($ItemPath -eq $UpdateDirectory -or (Test-ExcludedName -Name $InstalledItem.Name)) {
+            Write-UiMessage -UiKey "SkipExcluded" -FormatArgs $RelativePath
             continue
         }
-        if (Test-PathUnderDirectory -Path $UpdateDirectory -Directory $InstalledItem.FullName) {
-            $FailureCount += Remove-InstalledContent -Directory $InstalledItem.FullName
+        if (Test-PathUnderDirectory -Path $UpdateDirectory -Directory $ItemPath) {
+            $FailureCount += Remove-InstalledContent -Directory $ItemPath
             continue
         }
         try {
-            Remove-Item -Path $InstalledItem.FullName -Recurse -Force -ErrorAction Stop
+            Remove-Item -Path $ItemPath -Recurse -Force -ErrorAction Stop
         } catch {
-            Write-UiMessage -UiKey "RemoveFail" -FormatArgs @($RelativePath, $_.Exception.Message)
+            Write-UiMessage -UiKey "RemoveFail" -FormatArgs $RelativePath, $_.Exception.Message
             $FailureCount++
         }
     }
@@ -421,93 +447,94 @@ function Remove-InstalledContent {
 }
 
 function Install-Executable {
-    param ([Parameter(Mandatory)] [SelectedAsset]$Asset)
+    [CmdletBinding()]
+    param ([Parameter(Mandatory)] [UpdateAsset]$UpdateAsset)
 
-    $DestinationPath = Join-Path -Path $BaseDirectory -ChildPath $Asset.ReleaseAsset.Name
-    Move-Item -Path $Asset.FilePath -Destination $DestinationPath -Force -ErrorAction Stop
-    Write-UiMessage -UiKey "Moved" -FormatArgs @($Asset.ReleaseAsset.Name)
-    (Get-Item -Path $DestinationPath -ErrorAction Stop).LastWriteTime = $Asset.PublishedAt
-    Write-UiMessage -UiKey "TimestampSet" -FormatArgs @($Asset.PublishedAt)
+    $DestinationPath = Join-Path -Path $BaseDirectory -ChildPath $UpdateAsset.Asset.Name
+    Move-Item -Path $UpdateAsset.FilePath -Destination $DestinationPath -Force -ErrorAction Stop
+    Write-UiMessage -UiKey "Moved" -FormatArgs $UpdateAsset.Asset.Name
+    (Get-Item -Path $DestinationPath -ErrorAction Stop).LastWriteTime = $UpdateAsset.PublishedAt
+    Write-UiMessage -UiKey "TimestampSet" -FormatArgs $UpdateAsset.PublishedAt
 }
 
 function Install-ExtractedContent {
-    param ([Parameter(Mandatory)] [SelectedAsset]$Asset)
+    [CmdletBinding()]
+    param ([Parameter(Mandatory)] [UpdateAsset]$UpdateAsset)
 
-    $Filters = $Asset.App.InstallFilters
-    $AssetName = $Asset.ReleaseAsset.Name
-    $InstallSourceDirectory = $Asset.AssetDirectory
-    $AssetDirectoryItems = @(Get-ChildItem -Path $Asset.AssetDirectory)
-    $ChildDirectories = @($AssetDirectoryItems | Where-Object { $_.PSIsContainer })
-    $ChildFiles = @($AssetDirectoryItems | Where-Object { -not $_.PSIsContainer -and $_.Name -ne $AssetName })
-    if ($ChildDirectories.Count -eq 1 -and $ChildFiles.Count -eq 0) {
-        $InstallSourceDirectory = $ChildDirectories.FullName
+    $AssetName = $UpdateAsset.Asset.Name
+    $InstallFilters = $UpdateAsset.App.InstallFilters
+    $HasInstallFilters = $InstallFilters.Count -gt 0
+
+    $InstallSourceDirectory = $UpdateAsset.DownloadDirectory
+    $ExtractedItems = @(Get-ChildItem -Path $InstallSourceDirectory | Where-Object { $_.Name -ne $AssetName })
+    if ($ExtractedItems.Count -eq 1 -and $ExtractedItems[0].PSIsContainer) {
+        $InstallSourceDirectory = $ExtractedItems[0].FullName
     }
-    $HasFilters = $Filters.Count -gt 0
-    $InstallItems = if ($HasFilters) {
-        foreach ($Filter in $Filters) {
-            Get-ChildItem -Path $InstallSourceDirectory -Filter $Filter
+
+    $InstallItems = @(if ($HasInstallFilters) {
+        foreach ($InstallFilter in $InstallFilters) {
+            Get-ChildItem -Path $InstallSourceDirectory -Filter $InstallFilter
         }
     } else {
         Get-ChildItem -Path $InstallSourceDirectory
+    })
+    $MovedUiKey = "MovedFullStructure"
+    if ($HasInstallFilters) {
+        $MovedUiKey = "MovedFiltered"
     }
     foreach ($InstallItem in $InstallItems) {
         if ($InstallItem.Name -eq $AssetName) { continue }
         if (Test-ExcludedName -Name $InstallItem.Name) {
-            Write-UiMessage -UiKey "SkipExcluded" -FormatArgs @($InstallItem.Name)
+            Write-UiMessage -UiKey "SkipExcluded" -FormatArgs $InstallItem.Name
             continue
         }
-        $DestinationItemPath = Join-Path -Path $BaseDirectory -ChildPath $InstallItem.Name
-        if (Test-Path -Path $DestinationItemPath) {
-            Remove-Item -Path $DestinationItemPath -Recurse -Force -ErrorAction Stop
+        $DestinationPath = Join-Path -Path $BaseDirectory -ChildPath $InstallItem.Name
+        if (Test-Path -Path $DestinationPath) {
+            Remove-Item -Path $DestinationPath -Recurse -Force -ErrorAction Stop
         }
-        Move-Item -Path $InstallItem.FullName -Destination $DestinationItemPath -Force -ErrorAction Stop
-        if ($HasFilters) {
-            Write-UiMessage -UiKey "MovedFiltered" -FormatArgs @($InstallItem.Name)
-        } else {
-            Write-UiMessage -UiKey "MovedFullStructure" -FormatArgs @($InstallItem.Name)
-        }
+        Move-Item -Path $InstallItem.FullName -Destination $DestinationPath -Force -ErrorAction Stop
+        Write-UiMessage -UiKey $MovedUiKey -FormatArgs $InstallItem.Name
     }
 }
 
 function Test-FullUpdate {
+    [CmdletBinding()]
     param (
         [Parameter(Mandatory)] [App[]]$Apps,
         [Parameter(Mandatory)] [int]$InstallableAssetCount
     )
 
-    foreach ($App in $Apps) {
-        if (Test-Path -Path $App.ExecutablePath -PathType Leaf) {
-            return ($InstallableAssetCount -eq $Apps.Count)
-        }
-    }
-    return $true
+    $InstalledApps = @($Apps | Where-Object { Test-Path -Path $_.ExecutablePath -PathType Leaf })
+    if ($InstalledApps.Count -eq 0) { return $true }
+    return $InstallableAssetCount -eq $Apps.Count
 }
 
 function Install-Asset {
+    [CmdletBinding()]
     param (
-        [Parameter(Mandatory)] [SelectedAsset[]]$InstallableAssets,
-        [Parameter(Mandatory)] [bool]$IsFullUpdate
+        [Parameter(Mandatory)] [UpdateAsset[]]$UpdateAssets,
+        [switch]$FullUpdate
     )
 
     $FailureCount = 0
-    if ($IsFullUpdate) {
+    if ($FullUpdate) {
         Write-UiMessage -UiKey "FullUpdate"
-        Write-UiMessage -UiKey "RemovePreviousHeader" -FormatArgs @($BaseDirectory)
+        Write-UiMessage -UiKey "RemovePreviousInstall" -FormatArgs $BaseDirectory
         $FailureCount += Remove-InstalledContent -Directory $BaseDirectory
     } else {
         Write-UiMessage -UiKey "PartialUpdate"
     }
-    Write-UiMessage -UiKey "InstallHeader"
-    foreach ($InstallableAsset in $InstallableAssets) {
-        Write-UiMessage -UiKey "InstallItem" -FormatArgs @($InstallableAsset.Type, $InstallableAsset.ReleaseAsset.Name)
+    Write-UiMessage -UiKey "InstallAssets"
+    foreach ($UpdateAsset in $UpdateAssets) {
+        Write-UiMessage -UiKey "InstallItem" -FormatArgs $UpdateAsset.Type, $UpdateAsset.Asset.Name
         try {
-            if ($InstallableAsset.Type -eq [AssetType]::Executable) {
-                Install-Executable -Asset $InstallableAsset
+            if ($UpdateAsset.Type -eq [AssetType]::Executable) {
+                Install-Executable -UpdateAsset $UpdateAsset
             } else {
-                Install-ExtractedContent -Asset $InstallableAsset
+                Install-ExtractedContent -UpdateAsset $UpdateAsset
             }
         } catch {
-            Write-UiMessage -UiKey "InstallItemFail" -FormatArgs @($_.Exception.Message)
+            Write-UiMessage -UiKey "InstallItemFail" -FormatArgs $_.Exception.Message
             $FailureCount++
         }
     }
@@ -515,93 +542,124 @@ function Install-Asset {
 }
 
 function Remove-DownloadDirectory {
-    Write-UiMessage -UiKey "StepCleanDownload"
-    if (Test-Path -Path $DownloadDirectory -PathType Container) {
-        Remove-Item -Path $DownloadDirectory -Recurse -Force
-        Write-UiMessage -UiKey "RemovedDownloadDirectory" -FormatArgs @(Split-Path -Path $DownloadDirectory -Leaf)
-    }
+    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '')]
+    [CmdletBinding()]
+    param ()
+
+    Write-UiMessage -UiKey "StepRemoveDownload"
+    if (-not (Test-Path -Path $DownloadDirectory -PathType Container)) { return }
+    Remove-Item -Path $DownloadDirectory -Recurse -Force
+    Write-UiMessage -UiKey "RemovedDownloadDirectory" -FormatArgs (Split-Path -Path $DownloadDirectory -Leaf)
 }
 
 function Clear-AppCache {
-    param ([Parameter(Mandatory)] [bool]$IsFullUpdate)
+    [CmdletBinding()]
+    param ([switch]$FullUpdate)
 
-    if (-not $Settings.AppCache.Clear) { Write-UiMessage -UiKey "CacheClearOff"; return }
-    if (-not $IsFullUpdate) {
-        if (-not $Settings.AppCache.ClearOnPartialUpdate) { Write-UiMessage -UiKey "CacheClearSkipped"; return }
-        Write-UiMessage -UiKey "CacheClearForced"
+    if (-not $Settings.AppCache.Clear) {
+        Write-UiMessage -UiKey "CacheClearOff"
+        return
+    }
+    if (-not $FullUpdate) {
+        if (-not $Settings.AppCache.ClearOnPartialUpdate) {
+            Write-UiMessage -UiKey "CacheClearSkipped"
+            return
+        }
+        Write-UiMessage -UiKey "CacheClearOnPartialUpdate"
     }
     foreach ($AppCacheDirectory in $AppCacheDirectories) {
-        if (Test-Path -Path $AppCacheDirectory -PathType Container) {
-            Get-ChildItem -Path $AppCacheDirectory -Force | Remove-Item -Recurse -Force
-            Write-UiMessage -UiKey "CacheCleared" -FormatArgs @(Split-Path -Path $AppCacheDirectory -Leaf)
-        }
+        if (-not (Test-Path -Path $AppCacheDirectory -PathType Container)) { continue }
+        Get-ChildItem -Path $AppCacheDirectory -Force | Remove-Item -Recurse -Force
+        Write-UiMessage -UiKey "CacheCleared" -FormatArgs (Split-Path -Path $AppCacheDirectory -Leaf)
     }
 }
 
 function Invoke-Update {
-    # Validate configuration and paths
+    [CmdletBinding()]
+    param ()
+
     $Apps = Get-ConfiguredApp
     if (-not (Test-Path -Path $BaseDirectory -PathType Container)) {
-        throw [UpdateFailure]::new("NoBaseDirectory", @($BaseDirectory))
+        throw [UpdateException]::new("NoBaseDirectory", @($BaseDirectory))
     }
     if (-not (Test-Path -Path $UpdateDirectory -PathType Container)) {
-        throw [UpdateFailure]::new("NoUpdateDirectory", @($UpdateDirectory))
+        throw [UpdateException]::new("NoUpdateDirectory", @($UpdateDirectory))
     }
-    Stop-RunningProcess -Apps $Apps
+    $AppProcesses = Get-AppProcess -Apps $Apps
+    if ($AppProcesses.Count -gt 0) {
+        Stop-AppProcess -AppProcesses $AppProcesses
+    }
     $Repositories = @($Apps.UpdateTargets.Repository | Select-Object -Unique)
-    if ($Repositories.Count -eq 0) { throw [UpdateFailure]::new("NoUpdateTargets") }
+    if ($Repositories.Count -eq 0) { throw [UpdateException]::new("NoUpdateTargets") }
 
-    # Fetch Release Metadata
     Write-UiMessage -UiKey "StepFetchMetadata"
     $Releases = Get-Release -Repositories $Repositories
-    if ($Releases.Count -eq 0) { throw [UpdateFailure]::new("NoMetadata") }
+    if ($Releases.Count -eq 0) { throw [UpdateException]::new("NoMetadata") }
     Write-UiMessage -UiKey "FetchedRepositories"
     foreach ($Release in $Releases) {
-        Write-UiMessage -UiKey "FetchedRepositoryItem" -FormatArgs @($Release.Repository, $Release.PublishedAt)
+        Write-UiMessage -UiKey "FetchedRepositoryItem" -FormatArgs $Release.Repository, $Release.PublishedAt
     }
 
-    # Select Update Targets
     Write-UiMessage -UiKey "StepSelectAssets"
-    $Candidates = Select-LatestAsset -Apps $Apps -Releases $Releases
-    if ($Candidates.Count -eq 0) { throw [UpdateFailure]::new("NoMatchedAssets") }
-    $ApplicableAssets = Select-ApplicableAsset -Candidates $Candidates
-    if ($ApplicableAssets.Count -eq 0) { Write-UiMessage -UiKey "NoUpdateRequired"; return }
+    $Candidates = Select-CandidateAsset -Apps $Apps -Releases $Releases
+    if ($Candidates.Count -eq 0) { throw [UpdateException]::new("NoMatchedAssets") }
+    $ApplicableAssets = Select-ApplicableAsset -UpdateAssets $Candidates
+    if ($ApplicableAssets.Count -eq 0) {
+        Write-UiMessage -UiKey "NoUpdateRequired"
+        return
+    }
 
-    # Download, Verify & Install
     Write-UiMessage -UiKey "StepDownload"
     try {
-        $DownloadedAssets = Invoke-AssetDownload -ApplicableAssets $ApplicableAssets
+        $DownloadedAssets = Save-Asset -UpdateAssets $ApplicableAssets
         Write-UiMessage -UiKey "StepVerify"
-        $VerifiedAssets = Select-VerifiedAsset -DownloadedAssets $DownloadedAssets
-        if ($VerifiedAssets.Count -eq 0) { throw [UpdateFailure]::new("NoVerifiedAssets") }
+        $VerifiedAssets = Select-VerifiedAsset -UpdateAssets $DownloadedAssets
+        if ($VerifiedAssets.Count -eq 0) { throw [UpdateException]::new("NoVerifiedAssets") }
         Write-UiMessage -UiKey "StepExtract"
-        $InstallableAssets = Expand-AssetArchive -VerifiedAssets $VerifiedAssets
-        if ($InstallableAssets.Count -eq 0) { throw [UpdateFailure]::new("NoExtractedAssets") }
+        $InstallableAssets = Expand-AssetArchive -UpdateAssets $VerifiedAssets
+        if ($InstallableAssets.Count -eq 0) { throw [UpdateException]::new("NoExtractedAssets") }
         Write-UiMessage -UiKey "StepInstall"
         $IsFullUpdate = Test-FullUpdate -Apps $Apps -InstallableAssetCount $InstallableAssets.Count
-        $InstallFailureCount = Install-Asset -InstallableAssets $InstallableAssets -IsFullUpdate $IsFullUpdate
+        $InstallFailureCount = Install-Asset -UpdateAssets $InstallableAssets -FullUpdate:$IsFullUpdate
     } finally {
         Remove-DownloadDirectory
     }
-    if ($InstallFailureCount -gt 0) { throw [UpdateFailure]::new("InstallFail", @($InstallFailureCount)) }
+    if ($InstallFailureCount -gt 0) { throw [UpdateException]::new("InstallFail", @($InstallFailureCount)) }
 
-    # Cleanup
-    Write-UiMessage -UiKey "StepCleanCache"
-    Clear-AppCache -IsFullUpdate $IsFullUpdate
+    Write-UiMessage -UiKey "StepClearCache"
+    Clear-AppCache -FullUpdate:$IsFullUpdate
     if ($Settings.StartMenu.Create) {
         $StartMenuScriptPath = Join-Path -Path $PSScriptRoot -ChildPath $Settings.StartMenu.Script
         if (Test-Path -Path $StartMenuScriptPath -PathType Leaf) {
             & $StartMenuScriptPath
         }
     }
-    Write-UiMessage -UiKey "RunComplete"
+    Write-UiMessage -UiKey "RunCompleted"
 }
 
 # Main
 try {
-    Invoke-Update
-} catch [UpdateFailure] {
-    Write-UiMessage -UiKey $_.Exception.UiKey -FormatArgs $_.Exception.FormatArgs
-    Exit-WithMessage -Fail
+    $Settings = Import-JsonFile -FilePath (Join-Path -Path $PSScriptRoot -ChildPath "settings.json")
+    $UiTemplates = Import-JsonFile -FilePath (Join-Path -Path $PSScriptRoot -ChildPath "ui.json")
+} catch {
+    Write-Host " [X] $($_.Exception.Message)" -ForegroundColor Red
+    $null = Read-Host
+    exit 1
 }
-Exit-WithMessage
+
+$UpdateRules = $Settings.UpdateRules
+$BaseDirectory = Resolve-ConfiguredPath -Path $Settings.Paths.BaseDirectory
+$UpdateDirectory = Resolve-ConfiguredPath -Path $Settings.Paths.UpdateDirectory
+$DownloadDirectory = Join-Path -Path $UpdateDirectory -ChildPath "download"
+$TarExecutablePath = Join-Path -Path $env:SystemRoot -ChildPath "System32\tar.exe"
+$AppCacheDirectories = @($Settings.AppCache.Directories | ForEach-Object { Resolve-ConfiguredPath -Path $_ })
+$ErrorActionPreference = $Settings.ErrorActionPreference
+$ProgressPreference = $Settings.ProgressPreference
+
+try {
+    Invoke-Update
+} catch [UpdateException] {
+    Write-UiMessage -UiKey $_.Exception.UiKey -FormatArgs $_.Exception.FormatArgs
+    Exit-Script -Fail
+}
+Exit-Script
