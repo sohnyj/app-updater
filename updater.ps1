@@ -589,7 +589,9 @@ function Invoke-Update {
     if ($AppProcesses.Count -gt 0) {
         Stop-AppProcess -AppProcesses $AppProcesses
     }
-    $Repositories = @($Apps.UpdateTargets.Repository | Select-Object -Unique)
+    $Repositories = @($Apps.UpdateTargets.Repository |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+        Sort-Object -Unique)
     if ($Repositories.Count -eq 0) { throw [UpdateException]::new("NoUpdateTargets") }
 
     Write-UiMessage -UiKey "StepFetchMetadata"
@@ -601,9 +603,9 @@ function Invoke-Update {
     }
 
     Write-UiMessage -UiKey "StepSelectAssets"
-    $Candidates = Select-CandidateAsset -Apps $Apps -Releases $Releases
-    if ($Candidates.Count -eq 0) { throw [UpdateException]::new("NoMatchedAssets") }
-    $ApplicableAssets = Select-ApplicableAsset -UpdateAssets $Candidates
+    $CandidateAssets = Select-CandidateAsset -Apps $Apps -Releases $Releases
+    if ($CandidateAssets.Count -eq 0) { throw [UpdateException]::new("NoMatchedAssets") }
+    $ApplicableAssets = Select-ApplicableAsset -UpdateAssets $CandidateAssets
     if ($ApplicableAssets.Count -eq 0) {
         Write-UiMessage -UiKey "NoUpdateRequired"
         return
