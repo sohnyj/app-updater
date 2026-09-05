@@ -16,7 +16,7 @@ class UpdateTarget {
     UpdateTarget([PSCustomObject]$Definition) {
         $this.Repository = $Definition.Repository
         $this.AssetFilter = [string]$Definition.AssetFilter
-        $this.FilterPattern = if ($this.AssetFilter.Contains('*')) {
+        $this.FilterPattern = if ([WildcardPattern]::ContainsWildcardCharacters($this.AssetFilter)) {
             $this.AssetFilter
         } else {
             "*$($this.AssetFilter)*"
@@ -88,6 +88,7 @@ class UpdateAsset {
     [AssetType]$Type
     [string]$DownloadDirectory
     [string]$FilePath
+    [string]$ExtractDirectory
 
     UpdateAsset(
         [App]$App,
@@ -104,6 +105,7 @@ class UpdateAsset {
         $this.Type = $Type
         $this.DownloadDirectory = Join-Path -Path $DownloadRootDirectory -ChildPath $App.Name
         $this.FilePath = Join-Path -Path $this.DownloadDirectory -ChildPath $Asset.Name
+        $this.ExtractDirectory = Join-Path -Path $this.DownloadDirectory -ChildPath "extracted"
     }
 }
 
@@ -131,7 +133,7 @@ function Import-JsonFile {
         throw "Not found: $FilePath"
     }
     try {
-        return Get-Content -Path $FilePath -Raw | ConvertFrom-Json
+        return Get-Content -Path $FilePath -Raw -ErrorAction Stop | ConvertFrom-Json
     } catch {
         throw "Failed to parse: $FilePath ($($_.Exception.Message))"
     }
@@ -206,7 +208,7 @@ function Get-ConfiguredApp {
     param ()
 
     return @(foreach ($AppProperty in $Settings.Apps.PSObject.Properties) {
-        if ([string]::IsNullOrEmpty($AppProperty.Value.Executable)) {
+        if ([string]::IsNullOrWhiteSpace($AppProperty.Value.Executable)) {
             throw [UpdateException]::new("NoExecutable", @($AppProperty.Name))
         }
         [App]::new($AppProperty.Name, $AppProperty.Value, $BaseDirectory)
@@ -215,7 +217,7 @@ function Get-ConfiguredApp {
 
 function Get-AppProcess {
     [CmdletBinding()]
-    param ([Parameter(Mandatory)] [AllowEmptyCollection()] [App[]]$Apps)
+    param ([App[]]$Apps)
 
     return @(foreach ($App in $Apps) {
         foreach ($Process in @(Get-Process -Name $App.ProcessName -ErrorAction SilentlyContinue)) {
@@ -252,7 +254,7 @@ function Get-Release {
     param ([Parameter(Mandatory)] [string[]]$Repositories)
 
     $RequestHeaders = @{}
-    if (-not [string]::IsNullOrEmpty($Settings.Api.Token)) {
+    if (-not [string]::IsNullOrWhiteSpace($Settings.Api.Token)) {
         $RequestHeaders["Authorization"] = "Bearer $($Settings.Api.Token)"
     }
     return @(foreach ($Repository in $Repositories) {
@@ -271,7 +273,8 @@ function Get-Release {
             if ($StatusCode -eq 403 -or $StatusCode -eq 429) {
                 throw [UpdateException]::new("ApiRateLimitFail")
             }
-            Write-UiMessage -UiKey "ApiRequestFail" -FormatArgs $Repository, $_.Exception.Message
+            $Reason = $_.Exception.GetBaseException().Message
+            Write-UiMessage -UiKey "ApiRequestFail" -FormatArgs $Repository, $Reason
         }
     })
 }
@@ -297,7 +300,7 @@ function Select-CandidateAsset {
 
     return @(foreach ($App in $Apps) {
         $MatchedAssets = @(foreach ($Target in $App.UpdateTargets) {
-            if ([string]::IsNullOrEmpty($Target.AssetFilter)) {
+            if ([string]::IsNullOrWhiteSpace($Target.AssetFilter)) {
                 Write-UiMessage -UiKey "EmptyAssetFilter" -FormatArgs $Target.Repository, $App.Name
                 continue
             }
@@ -357,9 +360,7 @@ function Save-Asset {
     [CmdletBinding()]
     param ([Parameter(Mandatory)] [UpdateAsset[]]$UpdateAssets)
 
-    if (Test-Path -Path $DownloadDirectory -PathType Container) {
-        Remove-Item -Path $DownloadDirectory -Recurse -Force
-    }
+    $null = Remove-DownloadDirectory
     return @(foreach ($UpdateAsset in $UpdateAssets) {
         $null = New-Item -ItemType Directory -Path $UpdateAsset.DownloadDirectory -Force
         Write-UiMessage -UiKey "DownloadItem" -FormatArgs $UpdateAsset.App.Name, $UpdateAsset.Asset.Name -NoNewline
@@ -377,7 +378,7 @@ function Save-Asset {
 
 function Select-VerifiedAsset {
     [CmdletBinding()]
-    param ([Parameter(Mandatory)] [AllowEmptyCollection()] [UpdateAsset[]]$UpdateAssets)
+    param ([UpdateAsset[]]$UpdateAssets)
 
     return @(foreach ($UpdateAsset in $UpdateAssets) {
         Write-UiMessage -UiKey "VerifyItem" -FormatArgs $UpdateAsset.Asset.Name
@@ -403,7 +404,8 @@ function Expand-AssetArchive {
     return @(foreach ($UpdateAsset in $UpdateAssets) {
         if ($UpdateAsset.Type -eq [AssetType]::Archive) {
             Write-UiMessage -UiKey "ExtractItem" -FormatArgs $UpdateAsset.Asset.Name
-            $null = & $TarExecutablePath -x -f $UpdateAsset.FilePath -C $UpdateAsset.DownloadDirectory
+            $null = New-Item -ItemType Directory -Path $UpdateAsset.ExtractDirectory -Force
+            $null = & $TarExecutablePath -x -f $UpdateAsset.FilePath -C $UpdateAsset.ExtractDirectory
             if ($LASTEXITCODE -ne 0) {
                 Write-UiMessage -UiKey "ExtractFail" -FormatArgs $UpdateAsset.Asset.Name
                 continue
@@ -461,12 +463,11 @@ function Install-ExtractedContent {
     [CmdletBinding()]
     param ([Parameter(Mandatory)] [UpdateAsset]$UpdateAsset)
 
-    $AssetName = $UpdateAsset.Asset.Name
     $InstallFilters = $UpdateAsset.App.InstallFilters
     $HasInstallFilters = $InstallFilters.Count -gt 0
 
-    $InstallSourceDirectory = $UpdateAsset.DownloadDirectory
-    $ExtractedItems = @(Get-ChildItem -Path $InstallSourceDirectory | Where-Object { $_.Name -ne $AssetName })
+    $InstallSourceDirectory = $UpdateAsset.ExtractDirectory
+    $ExtractedItems = @(Get-ChildItem -Path $InstallSourceDirectory)
     if ($ExtractedItems.Count -eq 1 -and $ExtractedItems[0].PSIsContainer) {
         $InstallSourceDirectory = $ExtractedItems[0].FullName
     }
@@ -483,7 +484,6 @@ function Install-ExtractedContent {
         $MovedUiKey = "MovedFiltered"
     }
     foreach ($InstallItem in $InstallItems) {
-        if ($InstallItem.Name -eq $AssetName) { continue }
         if (Test-ExcludedName -Name $InstallItem.Name) {
             Write-UiMessage -UiKey "SkipExcluded" -FormatArgs $InstallItem.Name
             continue
@@ -544,12 +544,12 @@ function Install-Asset {
 function Remove-DownloadDirectory {
     [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '')]
     [CmdletBinding()]
+    [OutputType([bool])]
     param ()
 
-    Write-UiMessage -UiKey "StepRemoveDownload"
-    if (-not (Test-Path -Path $DownloadDirectory -PathType Container)) { return }
+    if (-not (Test-Path -Path $DownloadDirectory -PathType Container)) { return $false }
     Remove-Item -Path $DownloadDirectory -Recurse -Force
-    Write-UiMessage -UiKey "RemovedDownloadDirectory" -FormatArgs (Split-Path -Path $DownloadDirectory -Leaf)
+    return $true
 }
 
 function Clear-AppCache {
@@ -622,7 +622,11 @@ function Invoke-Update {
         $IsFullUpdate = Test-FullUpdate -Apps $Apps -InstallableAssetCount $InstallableAssets.Count
         $InstallFailureCount = Install-Asset -UpdateAssets $InstallableAssets -FullUpdate:$IsFullUpdate
     } finally {
-        Remove-DownloadDirectory
+        Write-UiMessage -UiKey "StepRemoveDownload"
+        if (Remove-DownloadDirectory) {
+            $DownloadDirectoryName = Split-Path -Path $DownloadDirectory -Leaf
+            Write-UiMessage -UiKey "RemovedDownloadDirectory" -FormatArgs $DownloadDirectoryName
+        }
     }
     if ($InstallFailureCount -gt 0) { throw [UpdateException]::new("InstallFail", @($InstallFailureCount)) }
 
