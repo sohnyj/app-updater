@@ -32,7 +32,6 @@
     "NoVerifiedAssets"         : { "Template": "\n [X] No asset passed verification.", "Color": "Red" },
     "StepExtract"              : { "Template": "\n [S] Extracting archives...", "Color": "Yellow" },
     "ExtractItem"              : { "Template": "     [E] Archive: {0}", "Color": "White" },
-    "ExtractFail"              : { "Template": "     [X] Extraction failed: {0}", "Color": "Red" },
     "NoExtractedAssets"        : { "Template": "\n [X] No archive could be extracted.", "Color": "Red" },
     "StepInstall"              : { "Template": "\n [S] Installing...", "Color": "Yellow" },
     "FullUpdate"               : { "Template": "     [I] Full update.", "Color": "Cyan" },

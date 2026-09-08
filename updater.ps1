@@ -402,13 +402,11 @@ function Expand-AssetArchive {
 
     return @(foreach ($UpdateAsset in $UpdateAssets) {
         if ($UpdateAsset.Type -eq [AssetType]::Archive) {
-            Write-UiMessage -UiKey "ExtractItem" -FormatArgs $UpdateAsset.Asset.Name
+            Write-UiMessage -UiKey "ExtractItem" -FormatArgs $UpdateAsset.Asset.Name -NoNewline
             $null = New-Item -ItemType Directory -Path $UpdateAsset.ExtractDirectory -Force
             $null = & $TarExecutablePath -x -f $UpdateAsset.FilePath -C $UpdateAsset.ExtractDirectory
-            if ($LASTEXITCODE -ne 0) {
-                Write-UiMessage -UiKey "ExtractFail" -FormatArgs $UpdateAsset.Asset.Name
-                continue
-            }
+            if ($LASTEXITCODE -ne 0) { continue }
+            Write-UiMessage -UiKey "StatusOk"
         }
         $UpdateAsset
     })
