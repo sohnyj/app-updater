@@ -380,7 +380,7 @@ function Select-VerifiedAsset {
     param ([UpdateAsset[]]$UpdateAssets)
 
     return @(foreach ($UpdateAsset in $UpdateAssets) {
-        Write-UiMessage -UiKey "VerifyItem" -FormatArgs $UpdateAsset.Asset.Name
+        Write-UiMessage -UiKey "VerifyItem" -FormatArgs $UpdateAsset.App.Name, $UpdateAsset.Asset.Name
         $FileHash = Get-FileHash -Path $UpdateAsset.FilePath -Algorithm SHA256
         $CalculatedDigest = "sha256:$($FileHash.Hash.ToLower())"
         Write-UiMessage -UiKey "VerifyItemDigest" -FormatArgs $CalculatedDigest -NoNewline
@@ -402,7 +402,7 @@ function Expand-AssetArchive {
 
     return @(foreach ($UpdateAsset in $UpdateAssets) {
         if ($UpdateAsset.Type -eq [AssetType]::Archive) {
-            Write-UiMessage -UiKey "ExtractItem" -FormatArgs $UpdateAsset.Asset.Name -NoNewline
+            Write-UiMessage -UiKey "ExtractItem" -FormatArgs $UpdateAsset.App.Name, $UpdateAsset.Asset.Name -NoNewline
             $null = New-Item -ItemType Directory -Path $UpdateAsset.ExtractDirectory -Force
             $null = & $TarExecutablePath -x -f $UpdateAsset.FilePath -C $UpdateAsset.ExtractDirectory
             if ($LASTEXITCODE -ne 0) { continue }
