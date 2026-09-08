@@ -86,7 +86,7 @@ class UpdateAsset {
     [DateTime]$PublishedAt
     [Asset]$Asset
     [AssetType]$Type
-    [string]$DownloadDirectory
+    [string]$AppDownloadDirectory
     [string]$FilePath
     [string]$ExtractDirectory
 
@@ -96,16 +96,16 @@ class UpdateAsset {
         [DateTime]$PublishedAt,
         [Asset]$Asset,
         [AssetType]$Type,
-        [string]$DownloadRootDirectory
+        [string]$DownloadDirectory
     ) {
         $this.App = $App
         $this.Target = $Target
         $this.PublishedAt = $PublishedAt
         $this.Asset = $Asset
         $this.Type = $Type
-        $this.DownloadDirectory = Join-Path -Path $DownloadRootDirectory -ChildPath $App.Name
-        $this.FilePath = Join-Path -Path $this.DownloadDirectory -ChildPath $Asset.Name
-        $this.ExtractDirectory = Join-Path -Path $this.DownloadDirectory -ChildPath "extracted"
+        $this.AppDownloadDirectory = Join-Path -Path $DownloadDirectory -ChildPath $App.Name
+        $this.FilePath = Join-Path -Path $this.AppDownloadDirectory -ChildPath $Asset.Name
+        $this.ExtractDirectory = Join-Path -Path $this.AppDownloadDirectory -ChildPath "extracted"
     }
 }
 
@@ -362,13 +362,12 @@ function Save-Asset {
 
     $null = Remove-DownloadDirectory
     return @(foreach ($UpdateAsset in $UpdateAssets) {
-        $null = New-Item -ItemType Directory -Path $UpdateAsset.DownloadDirectory -Force
+        $null = New-Item -ItemType Directory -Path $UpdateAsset.AppDownloadDirectory -Force
         Write-UiMessage -UiKey "DownloadItem" -FormatArgs $UpdateAsset.App.Name, $UpdateAsset.Asset.Name -NoNewline
-        try {
-            Invoke-WebRequest -Uri $UpdateAsset.Asset.DownloadUrl -OutFile $UpdateAsset.FilePath -ErrorAction Stop
-        } catch {
+        $CurlErrorMessage = & $CurlExecutablePath --silent --show-error --location --fail --stderr - --output $UpdateAsset.FilePath $UpdateAsset.Asset.DownloadUrl
+        if ($LASTEXITCODE -ne 0) {
             Write-UiMessage -UiKey "StatusFail"
-            Write-UiMessage -UiKey "DownloadFail" -FormatArgs $_.Exception.Message
+            Write-UiMessage -UiKey "DownloadFail" -FormatArgs "$CurlErrorMessage"
             continue
         }
         Write-UiMessage -UiKey "StatusOk"
@@ -651,6 +650,7 @@ $UpdateRules = $Settings.UpdateRules
 $BaseDirectory = Resolve-ConfiguredPath -Path $Settings.Paths.BaseDirectory
 $UpdateDirectory = Resolve-ConfiguredPath -Path $Settings.Paths.UpdateDirectory
 $DownloadDirectory = Join-Path -Path $UpdateDirectory -ChildPath "download"
+$CurlExecutablePath = Join-Path -Path $env:SystemRoot -ChildPath "System32\curl.exe"
 $TarExecutablePath = Join-Path -Path $env:SystemRoot -ChildPath "System32\tar.exe"
 $AppCacheDirectories = @(foreach ($Directory in $Settings.AppCache.Directories) {
     Resolve-ConfiguredPath -Path $Directory

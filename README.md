@@ -7,6 +7,7 @@ Updates local apps from GitHub Releases. Configured through `settings.json`.
 ## Requirements
 
 - PowerShell 5.1+ (built-in on Windows 10+)
+- `curl.exe` and `tar.exe` (built-in on Windows 10 1803+)
 
 ## Installation
 
@@ -34,7 +35,7 @@ With no local executable, date comparison is skipped and the latest release inst
 1. **Validate**: check paths, stop running apps
 2. **Fetch metadata**: latest release info from GitHub
 3. **Select targets**: release dates against local timestamps
-4. **Download**: fetch selected assets
+4. **Download**: fetch selected assets with `curl.exe`
 5. **Verify**: SHA256 against `digest`; `[NONE]` when absent, skip on mismatch
 6. **Extract**: unpack archives in the temp directory
 7. **Install**: remove the previous install if full, then move files in
@@ -99,4 +100,4 @@ With no local executable, date comparison is skipped and the latest release inst
 | `StartMenu.Create` | Run the Start Menu script after a successful update |
 | `StartMenu.Script` | Script file name, resolved beside the updater |
 | `ErrorActionPreference` | PowerShell error handling (`Continue` / `Stop`) |
-| `ProgressPreference` | Progress bar visibility (`SilentlyContinue` to hide) |
+| `ProgressPreference` | PowerShell progress bar visibility for the metadata request (`SilentlyContinue` to hide) |
