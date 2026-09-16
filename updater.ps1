@@ -364,7 +364,7 @@ function Save-Asset {
     return @(foreach ($UpdateAsset in $UpdateAssets) {
         $null = New-Item -ItemType Directory -Path $UpdateAsset.AppDownloadDirectory -Force
         Write-UiMessage -UiKey "DownloadItem" -FormatArgs $UpdateAsset.App.Name, $UpdateAsset.Asset.Name -NoNewline
-        $CurlErrorMessage = & $CurlExecutablePath --silent --show-error --location --fail --stderr - --output $UpdateAsset.FilePath $UpdateAsset.Asset.DownloadUrl
+        $CurlErrorMessage = & $CurlExecutablePath --silent --show-error --location --proto =https --fail --stderr - --output $UpdateAsset.FilePath $UpdateAsset.Asset.DownloadUrl
         if ($LASTEXITCODE -ne 0) {
             Write-UiMessage -UiKey "StatusFail"
             Write-UiMessage -UiKey "DownloadFail" -FormatArgs "$CurlErrorMessage"
