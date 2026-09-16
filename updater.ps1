@@ -519,11 +519,12 @@ function Install-Asset {
     }
     Write-UiMessage -UiKey "InstallAssets"
     foreach ($UpdateAsset in $UpdateAssets) {
-        Write-UiMessage -UiKey "InstallItem" -FormatArgs $UpdateAsset.Type, $UpdateAsset.Asset.Name
         try {
             if ($UpdateAsset.Type -eq [AssetType]::Executable) {
+                Write-UiMessage -UiKey "InstallExecutableItem" -FormatArgs $UpdateAsset.Asset.Name
                 Install-Executable -UpdateAsset $UpdateAsset
             } else {
+                Write-UiMessage -UiKey "InstallArchiveItem" -FormatArgs $UpdateAsset.Asset.Name
                 Install-ExtractedContent -UpdateAsset $UpdateAsset
             }
         } catch {
