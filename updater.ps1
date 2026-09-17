@@ -162,8 +162,8 @@ function Write-UiMessage {
 
     $UiTemplate = $UiTemplates.$UiKey
     $DisplayText = $UiTemplate.Template
-    if ($null -ne $FormatArgs -and $FormatArgs.Count -gt 0) {
-        $DisplayText = $UiTemplate.Template -f $FormatArgs
+    if ($FormatArgs.Count -gt 0) {
+        $DisplayText = $DisplayText -f $FormatArgs
     }
     Write-Host $DisplayText -ForegroundColor $UiTemplate.Color -NoNewline:$NoNewline
 }
@@ -239,8 +239,7 @@ function Stop-AppProcess {
         Write-UiMessage -UiKey "AppRunningItem" -FormatArgs $AppProcess.App.Name
     }
     Write-UiMessage -UiKey "AppContinuePrompt" -NoNewline
-    $UserChoice = Read-Host
-    if ($UserChoice -notmatch "^[yY]$") {
+    if ((Read-Host) -notmatch "^y$") {
         throw [UpdateException]::new("UserCanceled")
     }
     foreach ($AppProcess in $AppProcesses) {
@@ -318,11 +317,8 @@ function Select-CandidateAsset {
             $TargetAssets
         })
         if ($MatchedAssets.Count -eq 0) { continue }
-        $EligibleAssets = $MatchedAssets
         $PreferredAssets = @($MatchedAssets | Where-Object { $_.Target.Preferred })
-        if ($PreferredAssets.Count -gt 0) {
-            $EligibleAssets = $PreferredAssets
-        }
+        $EligibleAssets = if ($PreferredAssets.Count -gt 0) { $PreferredAssets } else { $MatchedAssets }
         $EligibleAssets | Sort-Object -Property PublishedAt -Descending | Select-Object -First 1
     })
 }
@@ -338,8 +334,7 @@ function Select-ApplicableAsset {
         $ThresholdTime = [DateTime]::MinValue
         $InstalledExecutable = Get-Item -Path $App.ExecutablePath -ErrorAction SilentlyContinue
         if ($null -ne $InstalledExecutable) {
-            $OffsetMinutes = $UpdateRules.LocalTimestampOffsetMinutes
-            $ThresholdTime = $InstalledExecutable.LastWriteTime.AddMinutes($OffsetMinutes)
+            $ThresholdTime = $InstalledExecutable.LastWriteTime.AddMinutes($UpdateRules.LocalTimestampOffsetMinutes)
         }
         $IsApplicable = $UpdateRules.ForceUpdate -or $Target.Force -or $PublishedAt -gt $ThresholdTime
         if ($IsApplicable) {
@@ -460,25 +455,21 @@ function Install-ExtractedContent {
     [CmdletBinding()]
     param ([Parameter(Mandatory)] [UpdateAsset]$UpdateAsset)
 
-    $InstallFilters = $UpdateAsset.App.InstallFilters
-    $HasInstallFilters = $InstallFilters.Count -gt 0
-
     $InstallSourceDirectory = $UpdateAsset.ExtractDirectory
     $ExtractedItems = @(Get-ChildItem -Path $InstallSourceDirectory)
     if ($ExtractedItems.Count -eq 1 -and $ExtractedItems[0].PSIsContainer) {
         $InstallSourceDirectory = $ExtractedItems[0].FullName
     }
 
-    $InstallItems = @(if ($HasInstallFilters) {
-        foreach ($InstallFilter in $InstallFilters) {
-            Get-ChildItem -Path $InstallSourceDirectory -Filter $InstallFilter
-        }
-    } else {
-        Get-ChildItem -Path $InstallSourceDirectory
-    })
-    $MovedUiKey = "MovedFullStructure"
-    if ($HasInstallFilters) {
+    $InstallFilters = $UpdateAsset.App.InstallFilters
+    if ($InstallFilters.Count -gt 0) {
         $MovedUiKey = "MovedFiltered"
+        $InstallItems = @(foreach ($InstallFilter in $InstallFilters) {
+            Get-ChildItem -Path $InstallSourceDirectory -Filter $InstallFilter
+        })
+    } else {
+        $MovedUiKey = "MovedFullStructure"
+        $InstallItems = @(Get-ChildItem -Path $InstallSourceDirectory)
     }
     foreach ($InstallItem in $InstallItems) {
         $DestinationPath = Join-Path -Path $BaseDirectory -ChildPath $InstallItem.Name
@@ -494,12 +485,15 @@ function Test-FullUpdate {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory)] [App[]]$Apps,
-        [Parameter(Mandatory)] [int]$InstallableAssetCount
+        [Parameter(Mandatory)] [UpdateAsset[]]$InstallableAssets
     )
 
-    $InstalledApps = @($Apps | Where-Object { Test-Path -Path $_.ExecutablePath -PathType Leaf })
-    if ($InstalledApps.Count -eq 0) { return $true }
-    return $InstallableAssetCount -eq $Apps.Count
+    $InstallableApps = $InstallableAssets.App
+    if (@($Apps | Where-Object { $_ -notin $InstallableApps }).Count -eq 0) { return $true }
+    foreach ($App in $Apps) {
+        if (Test-Path -Path $App.ExecutablePath) { return $false }
+    }
+    return $true
 }
 
 function Install-Asset {
@@ -615,7 +609,7 @@ function Invoke-Update {
         $InstallableAssets = Expand-AssetArchive -UpdateAssets $VerifiedAssets
         if ($InstallableAssets.Count -eq 0) { throw [UpdateException]::new("NoExtractedAssets") }
         Write-UiMessage -UiKey "StepInstall"
-        $IsFullUpdate = Test-FullUpdate -Apps $Apps -InstallableAssetCount $InstallableAssets.Count
+        $IsFullUpdate = Test-FullUpdate -Apps $Apps -InstallableAssets $InstallableAssets
         $InstallFailureCount = Install-Asset -UpdateAssets $InstallableAssets -FullUpdate:$IsFullUpdate
     } finally {
         Write-UiMessage -UiKey "StepRemoveDownload"
