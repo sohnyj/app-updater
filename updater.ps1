@@ -15,14 +15,14 @@ class UpdateTarget {
 
     UpdateTarget([PSCustomObject]$Definition) {
         $this.Repository = $Definition.Repository
-        $this.AssetFilter = [string]$Definition.AssetFilter
+        $this.AssetFilter = $Definition.AssetFilter
         $this.FilterPattern = if ([WildcardPattern]::ContainsWildcardCharacters($this.AssetFilter)) {
             $this.AssetFilter
         } else {
             "*$($this.AssetFilter)*"
         }
-        $this.Preferred = [bool]$Definition.Preferred
-        $this.Force = [bool]$Definition.Force
+        $this.Preferred = $Definition.Preferred
+        $this.Force = $Definition.Force
     }
 }
 
@@ -199,7 +199,7 @@ function Test-PathUnderDirectory {
 function Get-ConfiguredApp {
     return @(foreach ($AppProperty in $Settings.Apps.PSObject.Properties) {
         if ([string]::IsNullOrWhiteSpace($AppProperty.Value.Executable)) {
-            throw [UpdateException]::new("NoExecutable", @($AppProperty.Name))
+            throw [UpdateException]::new("NoExecutable", $AppProperty.Name)
         }
         [App]::new($AppProperty.Name, $AppProperty.Value, $BaseDirectory)
     })
@@ -209,7 +209,7 @@ function Get-AppProcess {
     param ([App[]]$Apps)
 
     return @(foreach ($App in $Apps) {
-        foreach ($Process in @(Get-Process -Name $App.ProcessName -ErrorAction SilentlyContinue)) {
+        foreach ($Process in Get-Process -Name $App.ProcessName -ErrorAction SilentlyContinue) {
             if ([string]::IsNullOrEmpty($Process.Path)) { continue }
             if (-not (Test-PathUnderDirectory -Path $Process.Path -Directory $BaseDirectory)) { continue }
             [AppProcess]::new($App, $Process)
@@ -533,10 +533,10 @@ function Clear-AppCache {
 function Invoke-Update {
     $Apps = Get-ConfiguredApp
     if (-not (Test-Path -Path $BaseDirectory -PathType Container)) {
-        throw [UpdateException]::new("NoBaseDirectory", @($BaseDirectory))
+        throw [UpdateException]::new("NoBaseDirectory", $BaseDirectory)
     }
     if (-not (Test-Path -Path $UpdateDirectory -PathType Container)) {
-        throw [UpdateException]::new("NoUpdateDirectory", @($UpdateDirectory))
+        throw [UpdateException]::new("NoUpdateDirectory", $UpdateDirectory)
     }
     $AppProcesses = Get-AppProcess -Apps $Apps
     if ($AppProcesses.Count -gt 0) {
@@ -583,7 +583,7 @@ function Invoke-Update {
             Write-UiMessage -UiKey "RemovedDownloadDirectory" -FormatArgs $DownloadDirectoryName
         }
     }
-    if ($InstallFailureCount -gt 0) { throw [UpdateException]::new("InstallFail", @($InstallFailureCount)) }
+    if ($InstallFailureCount -gt 0) { throw [UpdateException]::new("InstallFail", $InstallFailureCount) }
 
     Write-UiMessage -UiKey "StepClearCache"
     Clear-AppCache -FullUpdate:$IsFullUpdate
