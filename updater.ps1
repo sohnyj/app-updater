@@ -126,7 +126,6 @@ class UpdateException : System.Exception {
 
 # Configuration
 function Import-JsonFile {
-    [CmdletBinding()]
     param ([Parameter(Mandatory)] [string]$FilePath)
 
     if (-not (Test-Path -Path $FilePath -PathType Leaf)) {
@@ -140,7 +139,6 @@ function Import-JsonFile {
 }
 
 function Resolve-ConfiguredPath {
-    [CmdletBinding()]
     param ([Parameter(Mandatory)] [string]$Path)
 
     $ExpandedPath = [System.IO.Path]::GetFullPath([Environment]::ExpandEnvironmentVariables($Path))
@@ -152,8 +150,6 @@ function Resolve-ConfiguredPath {
 
 # Console
 function Write-UiMessage {
-    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSAvoidUsingWriteHost', '')]
-    [CmdletBinding()]
     param (
         [Parameter(Mandatory)] [string]$UiKey,
         [object[]]$FormatArgs,
@@ -169,7 +165,6 @@ function Write-UiMessage {
 }
 
 function Exit-Script {
-    [CmdletBinding()]
     param ([switch]$Fail)
 
     $ExitSound = [System.Media.SystemSounds]::Asterisk
@@ -186,14 +181,12 @@ function Exit-Script {
 
 # Pipeline
 function Test-ExcludedName {
-    [CmdletBinding()]
     param ([Parameter(Mandatory)] [string]$Name)
 
     return $UpdateRules.ExcludedNames -contains $Name
 }
 
 function Test-PathUnderDirectory {
-    [CmdletBinding()]
     param (
         [Parameter(Mandatory)] [string]$Path,
         [Parameter(Mandatory)] [string]$Directory
@@ -204,9 +197,6 @@ function Test-PathUnderDirectory {
 }
 
 function Get-ConfiguredApp {
-    [CmdletBinding()]
-    param ()
-
     return @(foreach ($AppProperty in $Settings.Apps.PSObject.Properties) {
         if ([string]::IsNullOrWhiteSpace($AppProperty.Value.Executable)) {
             throw [UpdateException]::new("NoExecutable", @($AppProperty.Name))
@@ -216,7 +206,6 @@ function Get-ConfiguredApp {
 }
 
 function Get-AppProcess {
-    [CmdletBinding()]
     param ([App[]]$Apps)
 
     return @(foreach ($App in $Apps) {
@@ -229,8 +218,6 @@ function Get-AppProcess {
 }
 
 function Stop-AppProcess {
-    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '')]
-    [CmdletBinding()]
     param ([Parameter(Mandatory)] [AppProcess[]]$AppProcesses)
 
     [System.Media.SystemSounds]::Beep.Play()
@@ -249,7 +236,6 @@ function Stop-AppProcess {
 }
 
 function Get-Release {
-    [CmdletBinding()]
     param ([Parameter(Mandatory)] [string[]]$Repositories)
 
     $RequestHeaders = @{}
@@ -279,7 +265,6 @@ function Get-Release {
 }
 
 function Get-AssetType {
-    [CmdletBinding()]
     param ([Parameter(Mandatory)] [string]$AssetName)
 
     foreach ($Type in [Enum]::GetValues([AssetType])) {
@@ -291,7 +276,6 @@ function Get-AssetType {
 }
 
 function Select-CandidateAsset {
-    [CmdletBinding()]
     param (
         [Parameter(Mandatory)] [App[]]$Apps,
         [Parameter(Mandatory)] [Release[]]$Releases
@@ -324,7 +308,6 @@ function Select-CandidateAsset {
 }
 
 function Select-ApplicableAsset {
-    [CmdletBinding()]
     param ([Parameter(Mandatory)] [UpdateAsset[]]$UpdateAssets)
 
     return @(foreach ($UpdateAsset in $UpdateAssets) {
@@ -352,7 +335,6 @@ function Select-ApplicableAsset {
 }
 
 function Save-Asset {
-    [CmdletBinding()]
     param ([Parameter(Mandatory)] [UpdateAsset[]]$UpdateAssets)
 
     $null = Remove-DownloadDirectory
@@ -371,7 +353,6 @@ function Save-Asset {
 }
 
 function Select-VerifiedAsset {
-    [CmdletBinding()]
     param ([UpdateAsset[]]$UpdateAssets)
 
     return @(foreach ($UpdateAsset in $UpdateAssets) {
@@ -392,7 +373,6 @@ function Select-VerifiedAsset {
 }
 
 function Expand-AssetArchive {
-    [CmdletBinding()]
     param ([Parameter(Mandatory)] [UpdateAsset[]]$UpdateAssets)
 
     return @(foreach ($UpdateAsset in $UpdateAssets) {
@@ -408,8 +388,6 @@ function Expand-AssetArchive {
 }
 
 function Remove-InstalledContent {
-    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '')]
-    [CmdletBinding()]
     param ([Parameter(Mandatory)] [string]$Directory)
 
     try {
@@ -441,7 +419,6 @@ function Remove-InstalledContent {
 }
 
 function Install-Executable {
-    [CmdletBinding()]
     param ([Parameter(Mandatory)] [UpdateAsset]$UpdateAsset)
 
     $DestinationPath = Join-Path -Path $BaseDirectory -ChildPath $UpdateAsset.Asset.Name
@@ -452,7 +429,6 @@ function Install-Executable {
 }
 
 function Install-ExtractedContent {
-    [CmdletBinding()]
     param ([Parameter(Mandatory)] [UpdateAsset]$UpdateAsset)
 
     $InstallSourceDirectory = $UpdateAsset.ExtractDirectory
@@ -482,7 +458,6 @@ function Install-ExtractedContent {
 }
 
 function Test-FullUpdate {
-    [CmdletBinding()]
     param (
         [Parameter(Mandatory)] [App[]]$Apps,
         [Parameter(Mandatory)] [UpdateAsset[]]$InstallableAssets
@@ -497,7 +472,6 @@ function Test-FullUpdate {
 }
 
 function Install-Asset {
-    [CmdletBinding()]
     param (
         [Parameter(Mandatory)] [UpdateAsset[]]$UpdateAssets,
         [switch]$FullUpdate
@@ -530,18 +504,12 @@ function Install-Asset {
 }
 
 function Remove-DownloadDirectory {
-    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUseShouldProcessForStateChangingFunctions', '')]
-    [CmdletBinding()]
-    [OutputType([bool])]
-    param ()
-
     if (-not (Test-Path -Path $DownloadDirectory -PathType Container)) { return $false }
     Remove-Item -Path $DownloadDirectory -Recurse -Force
     return $true
 }
 
 function Clear-AppCache {
-    [CmdletBinding()]
     param ([switch]$FullUpdate)
 
     if (-not $Settings.AppCache.Clear) {
@@ -563,9 +531,6 @@ function Clear-AppCache {
 }
 
 function Invoke-Update {
-    [CmdletBinding()]
-    param ()
-
     $Apps = Get-ConfiguredApp
     if (-not (Test-Path -Path $BaseDirectory -PathType Container)) {
         throw [UpdateException]::new("NoBaseDirectory", @($BaseDirectory))
