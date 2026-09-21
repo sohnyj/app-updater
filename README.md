@@ -41,6 +41,24 @@ With no local executable, date comparison is skipped and the latest release inst
 7. **Install**: remove the previous install if full, then move files in
 8. **Cleanup**: remove the download directory, optionally clear cache
 
+### Multiple targets
+
+List several targets to follow one app across build sources:
+
+```json
+"mpv": {
+    "Executable": "mpv.exe",
+    "UpdateTargets": [
+        { "Preferred": false, "Force": false, "Repository": "sohnyj/minimal-mpv-winbuild",  "AssetFilter": "mpv-x86_64-v3" },
+        { "Preferred": false, "Force": false, "Repository": "shinchiro/mpv-winbuild-cmake", "AssetFilter": "mpv-x86_64-v3" },
+        { "Preferred": false, "Force": false, "Repository": "zhongfly/mpv-winbuild",        "AssetFilter": "mpv-x86_64-v3" }
+    ],
+    "InstallFilters": []
+}
+```
+
+One asset is installed per app: the newest release among the matched targets wins. `Preferred` narrows the candidates to those targets, and falls back to the rest when none of them match.
+
 ## settings.json
 
 > [!CAUTION]
