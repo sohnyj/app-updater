@@ -128,11 +128,11 @@ class UpdateException : System.Exception {
 function Import-JsonFile {
     param ([Parameter(Mandatory)] [string]$FilePath)
 
-    if (-not (Test-Path -Path $FilePath -PathType Leaf)) {
+    if (-not (Test-Path -LiteralPath $FilePath -PathType Leaf)) {
         throw "Not found: $FilePath"
     }
     try {
-        return Get-Content -Path $FilePath -Raw -ErrorAction Stop | ConvertFrom-Json
+        return Get-Content -LiteralPath $FilePath -Raw -ErrorAction Stop | ConvertFrom-Json
     } catch {
         throw "Failed to parse: $FilePath ($($_.Exception.Message))"
     }
@@ -315,7 +315,7 @@ function Select-ApplicableAsset {
         $Target = $UpdateAsset.Target
         $PublishedAt = $UpdateAsset.PublishedAt
         $ThresholdTime = [DateTime]::MinValue
-        $InstalledExecutable = Get-Item -Path $App.ExecutablePath -ErrorAction SilentlyContinue
+        $InstalledExecutable = Get-Item -LiteralPath $App.ExecutablePath -ErrorAction SilentlyContinue
         if ($null -ne $InstalledExecutable) {
             $ThresholdTime = $InstalledExecutable.LastWriteTime.AddMinutes($UpdateRules.LocalTimestampOffsetMinutes)
         }
@@ -357,7 +357,7 @@ function Select-VerifiedAsset {
 
     return @(foreach ($UpdateAsset in $UpdateAssets) {
         Write-UiMessage -UiKey "VerifyItem" -FormatArgs $UpdateAsset.App.Name, $UpdateAsset.Asset.Name
-        $FileHash = Get-FileHash -Path $UpdateAsset.FilePath -Algorithm SHA256
+        $FileHash = Get-FileHash -LiteralPath $UpdateAsset.FilePath -Algorithm SHA256
         $CalculatedDigest = "sha256:$($FileHash.Hash.ToLower())"
         Write-UiMessage -UiKey "VerifyItemDigest" -FormatArgs $CalculatedDigest -NoNewline
         if ([string]::IsNullOrEmpty($UpdateAsset.Asset.Digest)) {
@@ -391,7 +391,7 @@ function Remove-InstalledContent {
     param ([Parameter(Mandatory)] [string]$Directory)
 
     try {
-        $InstalledItems = @(Get-ChildItem -Path $Directory -Force -ErrorAction Stop)
+        $InstalledItems = @(Get-ChildItem -LiteralPath $Directory -Force -ErrorAction Stop)
     } catch {
         Write-UiMessage -UiKey "RemoveFail" -FormatArgs (Split-Path -Path $Directory -Leaf), $_.Exception.Message
         return 1
@@ -409,7 +409,7 @@ function Remove-InstalledContent {
             continue
         }
         try {
-            Remove-Item -Path $ItemPath -Recurse -Force -ErrorAction Stop
+            Remove-Item -LiteralPath $ItemPath -Recurse -Force -ErrorAction Stop
         } catch {
             Write-UiMessage -UiKey "RemoveFail" -FormatArgs $RelativePath, $_.Exception.Message
             $FailureCount++
@@ -422,9 +422,9 @@ function Install-Executable {
     param ([Parameter(Mandatory)] [UpdateAsset]$UpdateAsset)
 
     $DestinationPath = Join-Path -Path $BaseDirectory -ChildPath $UpdateAsset.Asset.Name
-    Move-Item -Path $UpdateAsset.FilePath -Destination $DestinationPath -Force -ErrorAction Stop
+    Move-Item -LiteralPath $UpdateAsset.FilePath -Destination $DestinationPath -Force -ErrorAction Stop
     Write-UiMessage -UiKey "Moved" -FormatArgs $UpdateAsset.Asset.Name
-    (Get-Item -Path $DestinationPath -ErrorAction Stop).LastWriteTime = $UpdateAsset.PublishedAt
+    (Get-Item -LiteralPath $DestinationPath -ErrorAction Stop).LastWriteTime = $UpdateAsset.PublishedAt
     Write-UiMessage -UiKey "TimestampSet" -FormatArgs $UpdateAsset.PublishedAt
 }
 
@@ -432,7 +432,7 @@ function Install-ExtractedContent {
     param ([Parameter(Mandatory)] [UpdateAsset]$UpdateAsset)
 
     $InstallSourceDirectory = $UpdateAsset.ExtractDirectory
-    $ExtractedItems = @(Get-ChildItem -Path $InstallSourceDirectory)
+    $ExtractedItems = @(Get-ChildItem -LiteralPath $InstallSourceDirectory)
     if ($ExtractedItems.Count -eq 1 -and $ExtractedItems[0].PSIsContainer) {
         $InstallSourceDirectory = $ExtractedItems[0].FullName
     }
@@ -441,18 +441,18 @@ function Install-ExtractedContent {
     if ($InstallFilters.Count -gt 0) {
         $MovedUiKey = "MovedFiltered"
         $InstallItems = @(foreach ($InstallFilter in $InstallFilters) {
-            Get-ChildItem -Path $InstallSourceDirectory -Filter $InstallFilter
+            Get-ChildItem -LiteralPath $InstallSourceDirectory -Filter $InstallFilter
         })
     } else {
         $MovedUiKey = "MovedFullStructure"
-        $InstallItems = @(Get-ChildItem -Path $InstallSourceDirectory)
+        $InstallItems = @(Get-ChildItem -LiteralPath $InstallSourceDirectory)
     }
     foreach ($InstallItem in $InstallItems) {
         $DestinationPath = Join-Path -Path $BaseDirectory -ChildPath $InstallItem.Name
-        if (Test-Path -Path $DestinationPath) {
-            Remove-Item -Path $DestinationPath -Recurse -Force -ErrorAction Stop
+        if (Test-Path -LiteralPath $DestinationPath) {
+            Remove-Item -LiteralPath $DestinationPath -Recurse -Force -ErrorAction Stop
         }
-        Move-Item -Path $InstallItem.FullName -Destination $DestinationPath -Force -ErrorAction Stop
+        Move-Item -LiteralPath $InstallItem.FullName -Destination $DestinationPath -Force -ErrorAction Stop
         Write-UiMessage -UiKey $MovedUiKey -FormatArgs $InstallItem.Name
     }
 }
@@ -466,7 +466,7 @@ function Test-FullUpdate {
     $InstallableApps = $InstallableAssets.App
     if (@($Apps | Where-Object { $_ -notin $InstallableApps }).Count -eq 0) { return $true }
     foreach ($App in $Apps) {
-        if (Test-Path -Path $App.ExecutablePath) { return $false }
+        if (Test-Path -LiteralPath $App.ExecutablePath) { return $false }
     }
     return $true
 }
@@ -504,8 +504,8 @@ function Install-Asset {
 }
 
 function Remove-DownloadDirectory {
-    if (-not (Test-Path -Path $DownloadDirectory -PathType Container)) { return $false }
-    Remove-Item -Path $DownloadDirectory -Recurse -Force
+    if (-not (Test-Path -LiteralPath $DownloadDirectory -PathType Container)) { return $false }
+    Remove-Item -LiteralPath $DownloadDirectory -Recurse -Force
     return $true
 }
 
@@ -524,18 +524,18 @@ function Clear-AppCache {
         Write-UiMessage -UiKey "CacheClearOnPartialUpdate"
     }
     foreach ($AppCacheDirectory in $AppCacheDirectories) {
-        if (-not (Test-Path -Path $AppCacheDirectory -PathType Container)) { continue }
-        Get-ChildItem -Path $AppCacheDirectory -Force | Remove-Item -Recurse -Force
+        if (-not (Test-Path -LiteralPath $AppCacheDirectory -PathType Container)) { continue }
+        Get-ChildItem -LiteralPath $AppCacheDirectory -Force | Remove-Item -Recurse -Force
         Write-UiMessage -UiKey "CacheCleared" -FormatArgs (Split-Path -Path $AppCacheDirectory -Leaf)
     }
 }
 
 function Invoke-Update {
     $Apps = Get-ConfiguredApp
-    if (-not (Test-Path -Path $BaseDirectory -PathType Container)) {
+    if (-not (Test-Path -LiteralPath $BaseDirectory -PathType Container)) {
         throw [UpdateException]::new("NoBaseDirectory", $BaseDirectory)
     }
-    if (-not (Test-Path -Path $UpdateDirectory -PathType Container)) {
+    if (-not (Test-Path -LiteralPath $UpdateDirectory -PathType Container)) {
         throw [UpdateException]::new("NoUpdateDirectory", $UpdateDirectory)
     }
     $AppProcesses = Get-AppProcess -Apps $Apps
