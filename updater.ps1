@@ -132,7 +132,7 @@ function Import-JsonFile {
         throw "Not found: $FilePath"
     }
     try {
-        return Get-Content -LiteralPath $FilePath -Raw -ErrorAction Stop | ConvertFrom-Json
+        return Get-Content -LiteralPath $FilePath -Raw -Encoding UTF8 -ErrorAction Stop | ConvertFrom-Json
     } catch {
         throw "Failed to parse: $FilePath ($($_.Exception.Message))"
     }
