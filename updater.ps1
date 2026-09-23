@@ -621,5 +621,9 @@ try {
 } catch [UpdateException] {
     Write-UiMessage -UiKey $_.Exception.UiKey -FormatArgs $_.Exception.FormatArgs
     Exit-Script -Fail
+} catch {
+    $ScriptFileName = [System.IO.Path]::GetFileName($_.InvocationInfo.ScriptName)
+    Write-UiMessage -UiKey "UnexpectedFail" -FormatArgs $_.Exception.Message, $ScriptFileName, $_.InvocationInfo.ScriptLineNumber
+    Exit-Script -Fail
 }
 Exit-Script

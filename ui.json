@@ -63,6 +63,7 @@
     "DigestNotProvided"        : { "Template": "[NONE]", "Color": "DarkYellow" },
     "DigestMatch"              : { "Template": "[MATCH]", "Color": "Green" },
     "DigestMismatch"           : { "Template": "[MISMATCH]", "Color": "Red" },
+    "UnexpectedFail"           : { "Template": "\n [X] Unexpected failure: {0} ({1}:{2})", "Color": "Red" },
     "RunCompleted"             : { "Template": "\n [OK] All steps completed.", "Color": "Green" },
     "PressEnterExit"           : { "Template": "\n [?] Press [ENTER] to exit.", "Color": "White" }
 }
