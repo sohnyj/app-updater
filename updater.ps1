@@ -230,7 +230,7 @@ function Stop-AppProcess {
         throw [UpdateException]::new("UserCanceled")
     }
     foreach ($AppProcess in $AppProcesses) {
-        Stop-Process -Id $AppProcess.Process.Id -Force
+        Stop-Process -InputObject $AppProcess.Process -Force
     }
     Write-UiMessage -UiKey "ProcessesStopped"
 }
