@@ -49,7 +49,7 @@ List several targets to follow one app across build sources:
 "mpv": {
     "Executable": "mpv.exe",
     "UpdateTargets": [
-        { "Preferred": false, "Force": false, "Repository": "sohnyj/minimal-mpv-winbuild",  "AssetFilter": "mpv-x86_64-v3" },
+        { "Preferred": false, "Force": false, "Repository": "sohnyj/mpv-winbuild",          "AssetFilter": "mpv-x86_64-v3" },
         { "Preferred": false, "Force": false, "Repository": "shinchiro/mpv-winbuild-cmake", "AssetFilter": "mpv-x86_64-v3" },
         { "Preferred": false, "Force": false, "Repository": "zhongfly/mpv-winbuild",        "AssetFilter": "mpv-x86_64-v3" }
     ],
