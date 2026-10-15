@@ -13,7 +13,8 @@
         "ExcludedNames": ["cache", "watch_later", "update.lnk"]
     },
     "Api": {
-        "Endpoint": "https://api.github.com/repos/{0}/releases/latest",
+        "LatestEndpoint": "https://api.github.com/repos/{0}/releases/latest",
+        "TagEndpoint": "https://api.github.com/repos/{0}/releases/tags/{1}",
         "TimeoutSeconds": 15,
         "Token": ""
     },
@@ -21,21 +22,21 @@
         "mpv": {
             "Executable": "mpv.exe",
             "UpdateTargets": [
-                { "Preferred": false, "Force": false, "Repository": "sohnyj/mpv-winbuild", "AssetFilter": "mpv-x86_64-v3" }
+                { "Preferred": false, "Force": false, "Repository": "sohnyj/mpv-winbuild", "Tag": "latest", "AssetFilter": "mpv-x86_64-v3" }
             ],
-            "InstallFilters": ["mpv", "mpv.com", "mpv.exe"]
+            "InstallFilters": []
         },
         "ffmpeg": {
             "Executable": "ffmpeg.exe",
             "UpdateTargets": [
-                { "Preferred": false, "Force": false, "Repository": "sohnyj/mpv-winbuild", "AssetFilter": "ffmpeg-x86_64-v3" }
+                { "Preferred": false, "Force": false, "Repository": "sohnyj/mpv-winbuild", "Tag": "latest", "AssetFilter": "ffmpeg-x86_64-v3" }
             ],
             "InstallFilters": []
         },
         "yt-dlp": {
             "Executable": "yt-dlp.exe",
             "UpdateTargets": [
-                { "Preferred": false, "Force": false, "Repository": "yt-dlp/yt-dlp-nightly-builds", "AssetFilter": "yt-dlp.exe" }
+                { "Preferred": false, "Force": false, "Repository": "yt-dlp/yt-dlp-nightly-builds", "Tag": "latest", "AssetFilter": "yt-dlp.exe" }
             ],
             "InstallFilters": []
         }

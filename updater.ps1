@@ -8,6 +8,7 @@ enum AssetType {
 
 class UpdateTarget {
     [string]$Repository
+    [string]$Tag
     [string]$AssetFilter
     [string]$FilterPattern
     [bool]$Preferred
@@ -15,6 +16,7 @@ class UpdateTarget {
 
     UpdateTarget([PSCustomObject]$Definition) {
         $this.Repository = $Definition.Repository
+        $this.Tag = $Definition.Tag
         $this.AssetFilter = $Definition.AssetFilter
         $this.FilterPattern = if ([WildcardPattern]::ContainsWildcardCharacters($this.AssetFilter)) {
             $this.AssetFilter
@@ -46,26 +48,28 @@ class Asset {
     [string]$Name
     [string]$DownloadUrl
     [string]$Digest
+    [DateTime]$UpdatedAt
 
     Asset([PSCustomObject]$ApiAsset) {
         $this.Name = $ApiAsset.name
         $this.DownloadUrl = $ApiAsset.browser_download_url
         $this.Digest = $ApiAsset.digest
+        $this.UpdatedAt = [DateTime]::Parse(
+            $ApiAsset.updated_at,
+            [System.Globalization.CultureInfo]::InvariantCulture,
+            [System.Globalization.DateTimeStyles]::AssumeUniversal
+        ).ToLocalTime()
     }
 }
 
 class Release {
     [string]$Repository
-    [DateTime]$PublishedAt
+    [string]$Tag
     [Asset[]]$Assets
 
-    Release([string]$Repository, [PSCustomObject]$ApiRelease) {
+    Release([string]$Repository, [string]$Tag, [PSCustomObject]$ApiRelease) {
         $this.Repository = $Repository
-        $this.PublishedAt = [DateTime]::Parse(
-            $ApiRelease.published_at,
-            [System.Globalization.CultureInfo]::InvariantCulture,
-            [System.Globalization.DateTimeStyles]::AssumeUniversal
-        ).ToLocalTime()
+        $this.Tag = $Tag
         $this.Assets = @(foreach ($ApiAsset in $ApiRelease.assets) { [Asset]::new($ApiAsset) })
     }
 }
@@ -83,7 +87,6 @@ class AppProcess {
 class UpdateAsset {
     [App]$App
     [UpdateTarget]$Target
-    [DateTime]$PublishedAt
     [Asset]$Asset
     [AssetType]$Type
     [string]$AppDownloadDirectory
@@ -93,14 +96,12 @@ class UpdateAsset {
     UpdateAsset(
         [App]$App,
         [UpdateTarget]$Target,
-        [DateTime]$PublishedAt,
         [Asset]$Asset,
         [AssetType]$Type,
         [string]$DownloadDirectory
     ) {
         $this.App = $App
         $this.Target = $Target
-        $this.PublishedAt = $PublishedAt
         $this.Asset = $Asset
         $this.Type = $Type
         $this.AppDownloadDirectory = Join-Path -Path $DownloadDirectory -ChildPath $App.Name
@@ -236,17 +237,21 @@ function Stop-AppProcess {
 }
 
 function Get-Release {
-    param ([Parameter(Mandatory)] [string[]]$Repositories)
+    param ([Parameter(Mandatory)] [UpdateTarget[]]$Targets)
 
     $RequestHeaders = @{}
     if (-not [string]::IsNullOrWhiteSpace($Settings.Api.Token)) {
         $RequestHeaders["Authorization"] = "Bearer $($Settings.Api.Token)"
     }
-    return @(foreach ($Repository in $Repositories) {
+    return @(foreach ($Target in $Targets) {
         try {
-            $ApiEndpointUri = $Settings.Api.Endpoint -f $Repository
+            $ApiEndpointUri = if ($Target.Tag -eq "latest") {
+                $Settings.Api.LatestEndpoint -f $Target.Repository
+            } else {
+                $Settings.Api.TagEndpoint -f $Target.Repository, [Uri]::EscapeDataString($Target.Tag)
+            }
             $ApiRelease = Invoke-RestMethod -Uri $ApiEndpointUri -TimeoutSec $Settings.Api.TimeoutSeconds -Headers $RequestHeaders
-            [Release]::new($Repository, $ApiRelease)
+            [Release]::new($Target.Repository, $Target.Tag, $ApiRelease)
         } catch {
             $StatusCode = 0
             if ($_.Exception.Response) {
@@ -259,7 +264,7 @@ function Get-Release {
                 throw [UpdateException]::new("ApiRateLimitFail")
             }
             $Reason = $_.Exception.GetBaseException().Message
-            Write-UiMessage -UiKey "ApiRequestFail" -FormatArgs $Repository, $Reason
+            Write-UiMessage -UiKey "ApiRequestFail" -FormatArgs $Target.Repository, $Target.Tag, $Reason
         }
     })
 }
@@ -287,13 +292,19 @@ function Select-CandidateAsset {
                 Write-UiMessage -UiKey "EmptyAssetFilter" -FormatArgs $Target.Repository, $App.Name
                 continue
             }
-            $Release = $Releases | Where-Object { $_.Repository -eq $Target.Repository }
+            if ([string]::IsNullOrWhiteSpace($Target.Tag)) {
+                Write-UiMessage -UiKey "EmptyReleaseTag" -FormatArgs $Target.Repository, $App.Name
+                continue
+            }
+            $Release = $Releases | Where-Object {
+                $_.Repository -eq $Target.Repository -and $_.Tag -eq $Target.Tag
+            }
             if ($null -eq $Release) { continue }
             $TargetAssets = @(foreach ($Asset in $Release.Assets) {
                 if ($Asset.Name -notlike $Target.FilterPattern) { continue }
                 $Type = Get-AssetType -AssetName $Asset.Name
                 if ($null -eq $Type) { continue }
-                [UpdateAsset]::new($App, $Target, $Release.PublishedAt, $Asset, $Type, $DownloadDirectory)
+                [UpdateAsset]::new($App, $Target, $Asset, $Type, $DownloadDirectory)
             })
             if ($TargetAssets.Count -eq 0) {
                 Write-UiMessage -UiKey "NoTargetAsset" -FormatArgs $Target.Repository, $Target.AssetFilter
@@ -303,7 +314,7 @@ function Select-CandidateAsset {
         if ($MatchedAssets.Count -eq 0) { continue }
         $PreferredAssets = @($MatchedAssets | Where-Object { $_.Target.Preferred })
         $EligibleAssets = if ($PreferredAssets.Count -gt 0) { $PreferredAssets } else { $MatchedAssets }
-        $EligibleAssets | Sort-Object -Property PublishedAt -Descending | Select-Object -First 1
+        $EligibleAssets | Sort-Object -Property { $_.Asset.UpdatedAt } -Descending | Select-Object -First 1
     })
 }
 
@@ -313,23 +324,23 @@ function Select-ApplicableAsset {
     return @(foreach ($UpdateAsset in $UpdateAssets) {
         $App = $UpdateAsset.App
         $Target = $UpdateAsset.Target
-        $PublishedAt = $UpdateAsset.PublishedAt
+        $UpdatedAt = $UpdateAsset.Asset.UpdatedAt
         $ThresholdTime = [DateTime]::MinValue
         $InstalledExecutable = Get-Item -LiteralPath $App.ExecutablePath -ErrorAction SilentlyContinue
         if ($null -ne $InstalledExecutable) {
             $ThresholdTime = $InstalledExecutable.LastWriteTime.AddMinutes($UpdateRules.LocalTimestampOffsetMinutes)
         }
-        $IsApplicable = $UpdateRules.ForceUpdate -or $Target.Force -or $PublishedAt -gt $ThresholdTime
+        $IsApplicable = $UpdateRules.ForceUpdate -or $Target.Force -or $UpdatedAt -gt $ThresholdTime
         if ($IsApplicable) {
             Write-UiMessage -UiKey "SelectedAsset" -FormatArgs $App.Name, $Target.Repository -NoNewline
         } else {
-            Write-UiMessage -UiKey "NoNewRelease" -FormatArgs $Target.Repository, $PublishedAt -NoNewline
+            Write-UiMessage -UiKey "NoNewerAsset" -FormatArgs $Target.Repository, $UpdatedAt -NoNewline
         }
-        if ($Target.Preferred) { Write-UiMessage -UiKey "PreferredTag" -NoNewline }
-        if ($Target.Force) { Write-UiMessage -UiKey "ForceTag" -NoNewline }
+        if ($Target.Preferred) { Write-UiMessage -UiKey "PreferredLabel" -NoNewline }
+        if ($Target.Force) { Write-UiMessage -UiKey "ForceLabel" -NoNewline }
         Write-UiMessage -UiKey "EndLine"
         if (-not $IsApplicable) { continue }
-        Write-UiMessage -UiKey "SelectedAssetItem" -FormatArgs $UpdateAsset.Asset.Name, $PublishedAt
+        Write-UiMessage -UiKey "SelectedAssetItem" -FormatArgs $UpdateAsset.Asset.Name, $UpdatedAt
         $UpdateAsset
     })
 }
@@ -427,8 +438,8 @@ function Install-Executable {
     $DestinationPath = Join-Path -Path $BaseDirectory -ChildPath $UpdateAsset.Asset.Name
     Move-Item -LiteralPath $UpdateAsset.DownloadFilePath -Destination $DestinationPath -Force -ErrorAction Stop
     Write-UiMessage -UiKey "Moved" -FormatArgs $UpdateAsset.Asset.Name
-    (Get-Item -LiteralPath $DestinationPath -ErrorAction Stop).LastWriteTime = $UpdateAsset.PublishedAt
-    Write-UiMessage -UiKey "TimestampSet" -FormatArgs $UpdateAsset.PublishedAt
+    (Get-Item -LiteralPath $DestinationPath -ErrorAction Stop).LastWriteTime = $UpdateAsset.Asset.UpdatedAt
+    Write-UiMessage -UiKey "TimestampSet" -FormatArgs $UpdateAsset.Asset.UpdatedAt
 }
 
 function Install-ExtractedContent {
@@ -544,17 +555,19 @@ function Invoke-Update {
     if ($AppProcesses.Count -gt 0) {
         Stop-AppProcess -AppProcesses $AppProcesses
     }
-    $Repositories = @($Apps.UpdateTargets.Repository |
-        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
-        Sort-Object -Unique)
-    if ($Repositories.Count -eq 0) { throw [UpdateException]::new("NoUpdateTargets") }
+    $ReleaseTargets = @($Apps.UpdateTargets |
+        Where-Object {
+            -not [string]::IsNullOrWhiteSpace($_.Repository) -and -not [string]::IsNullOrWhiteSpace($_.Tag)
+        } |
+        Sort-Object -Property Repository, Tag -Unique)
+    if ($ReleaseTargets.Count -eq 0) { throw [UpdateException]::new("NoUpdateTargets") }
 
     Write-UiMessage -UiKey "StepFetchMetadata"
-    $Releases = Get-Release -Repositories $Repositories
+    $Releases = Get-Release -Targets $ReleaseTargets
     if ($Releases.Count -eq 0) { throw [UpdateException]::new("NoMetadata") }
-    Write-UiMessage -UiKey "FetchedRepositories"
+    Write-UiMessage -UiKey "FetchedReleases"
     foreach ($Release in $Releases) {
-        Write-UiMessage -UiKey "FetchedRepositoryItem" -FormatArgs $Release.Repository, $Release.PublishedAt
+        Write-UiMessage -UiKey "FetchedReleaseItem" -FormatArgs $Release.Repository, $Release.Tag
     }
 
     Write-UiMessage -UiKey "StepSelectAssets"

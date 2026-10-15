@@ -30,11 +30,11 @@ Run once, then double-click `update.lnk`.
 
 ## How it works
 
-With no local executable, date comparison is skipped and the latest release installs.
+With no local executable, date comparison is skipped and the release named by `Tag` installs.
 
 1. **Validate**: check paths, stop running apps
-2. **Fetch metadata**: latest release info from GitHub
-3. **Select assets**: one per app, release dates against local timestamps
+2. **Fetch metadata**: release info for each repository and tag from GitHub
+3. **Select assets**: one per app, asset update dates against local timestamps
 4. **Download**: fetch selected assets with `curl.exe`
 5. **Verify**: SHA256 against `digest`; `[NONE]` when absent, skip on mismatch
 6. **Extract**: unpack archives in the temp directory
@@ -49,15 +49,15 @@ List several targets to follow one app across build sources:
 "mpv": {
     "Executable": "mpv.exe",
     "UpdateTargets": [
-        { "Preferred": false, "Force": false, "Repository": "sohnyj/mpv-winbuild",          "AssetFilter": "mpv-x86_64-v3" },
-        { "Preferred": false, "Force": false, "Repository": "shinchiro/mpv-winbuild-cmake", "AssetFilter": "mpv-x86_64-v3" },
-        { "Preferred": false, "Force": false, "Repository": "zhongfly/mpv-winbuild",        "AssetFilter": "mpv-x86_64-v3" }
+        { "Preferred": false, "Force": false, "Repository": "sohnyj/mpv-winbuild",          "Tag": "latest",      "AssetFilter": "mpv-x86_64-v3" },
+        { "Preferred": false, "Force": false, "Repository": "shinchiro/mpv-winbuild-cmake", "Tag": "latest",      "AssetFilter": "mpv-x86_64-v3" },
+        { "Preferred": false, "Force": false, "Repository": "mpv-player/mpv",               "Tag": "git-release", "AssetFilter": "mpv-v*-x86_64-pc-windows-msvc.zip" }
     ],
     "InstallFilters": []
 }
 ```
 
-One asset is installed per app: the newest release among the matched targets wins. `Preferred` narrows the candidates to those targets, and falls back to the rest when none of them match.
+One asset is installed per app: the most recently updated asset among the matched targets wins. `Preferred` narrows the candidates to those targets, and falls back to the rest when none of them match.
 
 ## settings.json
 
@@ -76,8 +76,8 @@ One asset is installed per app: the newest release among the matched targets win
 | Key | Description |
 |-----|-------------|
 | `ForceUpdate` | Update regardless of date |
-| `LocalTimestampOffsetMinutes` | Minutes added to local `LastWriteTime`, offsetting the build-to-publish gap |
-| `AssetTypes.Executable` | Installed as a single file; `LastWriteTime` set to the release date |
+| `LocalTimestampOffsetMinutes` | Minutes added to local `LastWriteTime`, offsetting the build-to-upload gap |
+| `AssetTypes.Executable` | Installed as a single file; `LastWriteTime` set to the asset update date |
 | `AssetTypes.Archive` | Extracted before install; original `LastWriteTime` kept. Compressed tarballs unpack in one pass |
 | `ExcludedNames` | Names kept during full-update deletion (exact match) |
 
@@ -85,7 +85,8 @@ One asset is installed per app: the newest release among the matched targets win
 
 | Key | Description |
 |-----|-------------|
-| `Endpoint` | GitHub release API endpoint |
+| `LatestEndpoint` | GitHub API endpoint for `Tag` = `latest` |
+| `TagEndpoint` | GitHub API endpoint for other tags |
 | `TimeoutSeconds` | Timeout for the metadata request |
 | `Token` | For the metadata request. Empty = 60 req/hour, set = 5000. Not used for downloads |
 
@@ -97,7 +98,7 @@ One asset is installed per app: the newest release among the matched targets win
 | Key | Description |
 |-----|-------------|
 | `Executable` | Name used to read `LastWriteTime` |
-| `UpdateTargets` | Repository and asset filter pairs |
+| `UpdateTargets` | Repository, tag, and asset filter sets |
 | `InstallFilters` | Items to install from an archive. Empty = all |
 
 ### `UpdateTargets`
@@ -107,6 +108,7 @@ One asset is installed per app: the newest release among the matched targets win
 | `Preferred` | Prefer over the app's other targets |
 | `Force` | Update regardless of date |
 | `Repository` | GitHub repository as `owner/repo` |
+| `Tag` | Release tag, such as `git-release`, or `latest`. Empty = skipped |
 | `AssetFilter` | Substring matched against asset names. With wildcards (`*`, `?`, `[ ]`), matched against the whole name instead. Only `AssetTypes` extensions are matched |
 
 ### Misc options
