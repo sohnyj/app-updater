@@ -34,7 +34,7 @@ With no local executable, date comparison is skipped and the latest release inst
 
 1. **Validate**: check paths, stop running apps
 2. **Fetch metadata**: latest release info from GitHub
-3. **Select targets**: release dates against local timestamps
+3. **Select assets**: one per app, release dates against local timestamps
 4. **Download**: fetch selected assets with `curl.exe`
 5. **Verify**: SHA256 against `digest`; `[NONE]` when absent, skip on mismatch
 6. **Extract**: unpack archives in the temp directory
@@ -106,13 +106,13 @@ One asset is installed per app: the newest release among the matched targets win
 | `Preferred` | Prefer over the app's other targets |
 | `Force` | Update regardless of date |
 | `Repository` | GitHub repository as `owner/repo` |
-| `AssetFilter` | Substring matched against asset names |
+| `AssetFilter` | Substring matched against asset names. With wildcards (`*`, `?`, `[ ]`), matched against the whole name instead. Only `AssetTypes` extensions are matched |
 
 ### Misc options
 
 | Key | Description |
 |-----|-------------|
-| `AppCache.Clear` | Clear them on full update |
+| `AppCache.Clear` | Empty `AppCache.Directories` after a full update |
 | `AppCache.ClearOnPartialUpdate` | Clear on partial updates too |
 | `AppCache.Directories` | Cache directories emptied after update |
 | `StartMenu.Create` | Run the Start Menu script after a successful update |
