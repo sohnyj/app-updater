@@ -87,7 +87,7 @@ class UpdateAsset {
     [Asset]$Asset
     [AssetType]$Type
     [string]$AppDownloadDirectory
-    [string]$FilePath
+    [string]$DownloadFilePath
     [string]$ExtractDirectory
 
     UpdateAsset(
@@ -104,7 +104,7 @@ class UpdateAsset {
         $this.Asset = $Asset
         $this.Type = $Type
         $this.AppDownloadDirectory = Join-Path -Path $DownloadDirectory -ChildPath $App.Name
-        $this.FilePath = Join-Path -Path $this.AppDownloadDirectory -ChildPath $Asset.Name
+        $this.DownloadFilePath = Join-Path -Path $this.AppDownloadDirectory -ChildPath $Asset.Name
         $this.ExtractDirectory = Join-Path -Path $this.AppDownloadDirectory -ChildPath "extracted"
     }
 }
@@ -341,7 +341,7 @@ function Save-Asset {
     return @(foreach ($UpdateAsset in $UpdateAssets) {
         $null = New-Item -ItemType Directory -Path $UpdateAsset.AppDownloadDirectory -Force
         Write-UiMessage -UiKey "DownloadItem" -FormatArgs $UpdateAsset.App.Name, $UpdateAsset.Asset.Name -NoNewline
-        $CurlErrorMessage = & $CurlExecutablePath --silent --show-error --location --proto =https --fail --stderr - --output $UpdateAsset.FilePath $UpdateAsset.Asset.DownloadUrl
+        $CurlErrorMessage = & $CurlExecutablePath --silent --show-error --location --proto =https --fail --stderr - --output $UpdateAsset.DownloadFilePath $UpdateAsset.Asset.DownloadUrl
         if ($LASTEXITCODE -ne 0) {
             Write-UiMessage -UiKey "StatusFail"
             Write-UiMessage -UiKey "DownloadFail" -FormatArgs "$CurlErrorMessage"
@@ -353,11 +353,11 @@ function Save-Asset {
 }
 
 function Select-VerifiedAsset {
-    param ([UpdateAsset[]]$UpdateAssets)
+    param ([Parameter(Mandatory)] [UpdateAsset[]]$UpdateAssets)
 
     return @(foreach ($UpdateAsset in $UpdateAssets) {
         Write-UiMessage -UiKey "VerifyItem" -FormatArgs $UpdateAsset.App.Name, $UpdateAsset.Asset.Name
-        $FileHash = Get-FileHash -LiteralPath $UpdateAsset.FilePath -Algorithm SHA256
+        $FileHash = Get-FileHash -LiteralPath $UpdateAsset.DownloadFilePath -Algorithm SHA256
         $CalculatedDigest = "sha256:$($FileHash.Hash.ToLower())"
         Write-UiMessage -UiKey "VerifyItemDigest" -FormatArgs $CalculatedDigest -NoNewline
         if ([string]::IsNullOrEmpty($UpdateAsset.Asset.Digest)) {
@@ -379,7 +379,7 @@ function Expand-AssetArchive {
         if ($UpdateAsset.Type -eq [AssetType]::Archive) {
             Write-UiMessage -UiKey "ExtractItem" -FormatArgs $UpdateAsset.App.Name, $UpdateAsset.Asset.Name -NoNewline
             $null = New-Item -ItemType Directory -Path $UpdateAsset.ExtractDirectory -Force
-            $null = & $TarExecutablePath -x -f $UpdateAsset.FilePath -C $UpdateAsset.ExtractDirectory
+            $null = & $TarExecutablePath -x -f $UpdateAsset.DownloadFilePath -C $UpdateAsset.ExtractDirectory
             if ($LASTEXITCODE -ne 0) {
                 Write-UiMessage -UiKey "StatusFail"
                 continue
@@ -425,7 +425,7 @@ function Install-Executable {
     param ([Parameter(Mandatory)] [UpdateAsset]$UpdateAsset)
 
     $DestinationPath = Join-Path -Path $BaseDirectory -ChildPath $UpdateAsset.Asset.Name
-    Move-Item -LiteralPath $UpdateAsset.FilePath -Destination $DestinationPath -Force -ErrorAction Stop
+    Move-Item -LiteralPath $UpdateAsset.DownloadFilePath -Destination $DestinationPath -Force -ErrorAction Stop
     Write-UiMessage -UiKey "Moved" -FormatArgs $UpdateAsset.Asset.Name
     (Get-Item -LiteralPath $DestinationPath -ErrorAction Stop).LastWriteTime = $UpdateAsset.PublishedAt
     Write-UiMessage -UiKey "TimestampSet" -FormatArgs $UpdateAsset.PublishedAt
@@ -463,10 +463,9 @@ function Install-ExtractedContent {
 function Test-FullUpdate {
     param (
         [Parameter(Mandatory)] [App[]]$Apps,
-        [Parameter(Mandatory)] [UpdateAsset[]]$InstallableAssets
+        [Parameter(Mandatory)] [App[]]$InstallableApps
     )
 
-    $InstallableApps = $InstallableAssets.App
     if (@($Apps | Where-Object { $_ -notin $InstallableApps }).Count -eq 0) { return $true }
     foreach ($App in $Apps) {
         if (Test-Path -LiteralPath $App.ExecutablePath) { return $false }
@@ -570,6 +569,7 @@ function Invoke-Update {
     Write-UiMessage -UiKey "StepDownload"
     try {
         $DownloadedAssets = Save-Asset -UpdateAssets $ApplicableAssets
+        if ($DownloadedAssets.Count -eq 0) { throw [UpdateException]::new("NoDownloadedAssets") }
         Write-UiMessage -UiKey "StepVerify"
         $VerifiedAssets = Select-VerifiedAsset -UpdateAssets $DownloadedAssets
         if ($VerifiedAssets.Count -eq 0) { throw [UpdateException]::new("NoVerifiedAssets") }
@@ -577,7 +577,7 @@ function Invoke-Update {
         $InstallableAssets = Expand-AssetArchive -UpdateAssets $VerifiedAssets
         if ($InstallableAssets.Count -eq 0) { throw [UpdateException]::new("NoExtractedAssets") }
         Write-UiMessage -UiKey "StepInstall"
-        $IsFullUpdate = Test-FullUpdate -Apps $Apps -InstallableAssets $InstallableAssets
+        $IsFullUpdate = Test-FullUpdate -Apps $Apps -InstallableApps $InstallableAssets.App
         $InstallFailureCount = Install-Asset -UpdateAssets $InstallableAssets -FullUpdate:$IsFullUpdate
     } finally {
         Write-UiMessage -UiKey "StepRemoveDownload"

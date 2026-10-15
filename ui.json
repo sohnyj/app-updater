@@ -26,6 +26,7 @@
     "StepDownload"             : { "Template": "\n [S] Downloading...", "Color": "Yellow" },
     "DownloadFail"             : { "Template": "     [X] Download failed: {0}", "Color": "Red" },
     "DownloadItem"             : { "Template": "     [D] [{0}] {1}", "Color": "White" },
+    "NoDownloadedAssets"       : { "Template": "\n [X] No asset downloaded.", "Color": "Red" },
     "StepVerify"               : { "Template": "\n [S] Verifying integrity...", "Color": "Yellow" },
     "VerifyItem"               : { "Template": "     [V] [{0}] {1}", "Color": "Cyan" },
     "VerifyItemDigest"         : { "Template": "         {0} ", "Color": "DarkCyan" },
