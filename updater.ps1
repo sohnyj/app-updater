@@ -380,7 +380,10 @@ function Expand-AssetArchive {
             Write-UiMessage -UiKey "ExtractItem" -FormatArgs $UpdateAsset.App.Name, $UpdateAsset.Asset.Name -NoNewline
             $null = New-Item -ItemType Directory -Path $UpdateAsset.ExtractDirectory -Force
             $null = & $TarExecutablePath -x -f $UpdateAsset.FilePath -C $UpdateAsset.ExtractDirectory
-            if ($LASTEXITCODE -ne 0) { continue }
+            if ($LASTEXITCODE -ne 0) {
+                Write-UiMessage -UiKey "StatusFail"
+                continue
+            }
             Write-UiMessage -UiKey "StatusOk"
         }
         $UpdateAsset
