@@ -86,6 +86,7 @@ One asset is installed per app: the newest release among the matched targets win
 | Key | Description |
 |-----|-------------|
 | `Endpoint` | GitHub release API endpoint |
+| `TimeoutSeconds` | Timeout for the metadata request |
 | `Token` | For the metadata request. Empty = 60 req/hour, set = 5000. Not used for downloads |
 
 > [!NOTE]

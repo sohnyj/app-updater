@@ -14,6 +14,7 @@
     },
     "Api": {
         "Endpoint": "https://api.github.com/repos/{0}/releases/latest",
+        "TimeoutSeconds": 15,
         "Token": ""
     },
     "Apps": {

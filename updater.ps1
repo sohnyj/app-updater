@@ -245,7 +245,7 @@ function Get-Release {
     return @(foreach ($Repository in $Repositories) {
         try {
             $ApiEndpointUri = $Settings.Api.Endpoint -f $Repository
-            $ApiRelease = Invoke-RestMethod -Uri $ApiEndpointUri -TimeoutSec 15 -Headers $RequestHeaders
+            $ApiRelease = Invoke-RestMethod -Uri $ApiEndpointUri -TimeoutSec $Settings.Api.TimeoutSeconds -Headers $RequestHeaders
             [Release]::new($Repository, $ApiRelease)
         } catch {
             $StatusCode = 0
