@@ -15,5 +15,5 @@ $Shortcut.Description = "Update mpv, ffmpeg and yt-dlp"
 
 $Shortcut.Save()
 
-Write-Host "`n [I] Updater Path: $ShortcutPath" -ForegroundColor Gray
+Write-Host "`n [I] Updater Shortcut Path: $ShortcutPath" -ForegroundColor Gray
 Write-Host " [+] Updater Shortcut created successfully.`n" -ForegroundColor Green
