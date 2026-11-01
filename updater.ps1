@@ -352,7 +352,7 @@ function Save-Asset {
     return @(foreach ($UpdateAsset in $UpdateAssets) {
         $null = New-Item -ItemType Directory -Path $UpdateAsset.AppDownloadDirectory -Force
         Write-UiMessage -UiKey "DownloadItem" -FormatArgs $UpdateAsset.App.Name, $UpdateAsset.Asset.Name -NoNewline
-        $CurlErrorMessage = & $CurlExecutablePath --silent --show-error --location --proto =https --fail --stderr - --output $UpdateAsset.DownloadFilePath $UpdateAsset.Asset.DownloadUrl
+        $CurlErrorMessage = & $CurlExecutablePath @CurlOptions --output $UpdateAsset.DownloadFilePath $UpdateAsset.Asset.DownloadUrl
         if ($LASTEXITCODE -ne 0) {
             Write-UiMessage -UiKey "StatusFail"
             Write-UiMessage -UiKey "DownloadFail" -FormatArgs "$CurlErrorMessage"
@@ -625,6 +625,7 @@ $BaseDirectory = Resolve-ConfiguredPath -Path $Settings.Paths.BaseDirectory
 $UpdateDirectory = Resolve-ConfiguredPath -Path $Settings.Paths.UpdateDirectory
 $DownloadDirectory = Join-Path -Path $UpdateDirectory -ChildPath "download"
 $CurlExecutablePath = Join-Path -Path $env:SystemRoot -ChildPath "System32\curl.exe"
+$CurlOptions = @("--silent", "--show-error", "--location", "--proto", "=https", "--fail", "--stderr", "-")
 $TarExecutablePath = Join-Path -Path $env:SystemRoot -ChildPath "System32\tar.exe"
 $AppCacheDirectories = @(foreach ($Directory in $Settings.AppCache.Directories) {
     Resolve-ConfiguredPath -Path $Directory
