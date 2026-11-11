@@ -198,24 +198,24 @@ function Test-PathUnderDirectory {
 }
 
 function Get-ConfiguredApp {
-    return @(foreach ($AppProperty in $Settings.Apps.PSObject.Properties) {
+    foreach ($AppProperty in $Settings.Apps.PSObject.Properties) {
         if ([string]::IsNullOrWhiteSpace($AppProperty.Value.Executable)) {
             throw [UpdateException]::new("NoExecutable", $AppProperty.Name)
         }
         [App]::new($AppProperty.Name, $AppProperty.Value, $BaseDirectory)
-    })
+    }
 }
 
 function Get-AppProcess {
     param ([App[]]$Apps)
 
-    return @(foreach ($App in $Apps) {
+    foreach ($App in $Apps) {
         foreach ($Process in Get-Process -Name $App.ProcessName -ErrorAction SilentlyContinue) {
             if ([string]::IsNullOrEmpty($Process.Path)) { continue }
             if (-not (Test-PathUnderDirectory -Path $Process.Path -Directory $BaseDirectory)) { continue }
             [AppProcess]::new($App, $Process)
         }
-    })
+    }
 }
 
 function Stop-AppProcess {
@@ -243,7 +243,7 @@ function Get-Release {
     if (-not [string]::IsNullOrWhiteSpace($Settings.Api.Token)) {
         $RequestHeaders["Authorization"] = "Bearer $($Settings.Api.Token)"
     }
-    return @(foreach ($Target in $Targets) {
+    foreach ($Target in $Targets) {
         try {
             $ApiEndpointUri = if ($Target.Tag -eq "latest") {
                 $Settings.Api.LatestEndpoint -f $Target.Repository
@@ -266,7 +266,7 @@ function Get-Release {
             $Reason = $_.Exception.GetBaseException().Message
             Write-UiMessage -UiKey "ApiRequestFail" -FormatArgs $Target.Repository, $Target.Tag, $Reason
         }
-    })
+    }
 }
 
 function Get-AssetType {
@@ -286,7 +286,7 @@ function Select-CandidateAsset {
         [Parameter(Mandatory)] [Release[]]$Releases
     )
 
-    return @(foreach ($App in $Apps) {
+    foreach ($App in $Apps) {
         $MatchedAssets = @(foreach ($Target in $App.UpdateTargets) {
             if ([string]::IsNullOrWhiteSpace($Target.AssetFilter)) {
                 Write-UiMessage -UiKey "EmptyAssetFilter" -FormatArgs $Target.Repository, $App.Name
@@ -315,13 +315,13 @@ function Select-CandidateAsset {
         $PreferredAssets = @($MatchedAssets | Where-Object { $_.Target.Preferred })
         $EligibleAssets = if ($PreferredAssets.Count -gt 0) { $PreferredAssets } else { $MatchedAssets }
         $EligibleAssets | Sort-Object -Property { $_.Asset.UpdatedAt } -Descending | Select-Object -First 1
-    })
+    }
 }
 
 function Select-ApplicableAsset {
     param ([Parameter(Mandatory)] [UpdateAsset[]]$UpdateAssets)
 
-    return @(foreach ($UpdateAsset in $UpdateAssets) {
+    foreach ($UpdateAsset in $UpdateAssets) {
         $App = $UpdateAsset.App
         $Target = $UpdateAsset.Target
         $UpdatedAt = $UpdateAsset.Asset.UpdatedAt
@@ -342,14 +342,14 @@ function Select-ApplicableAsset {
         if (-not $IsApplicable) { continue }
         Write-UiMessage -UiKey "SelectedAssetItem" -FormatArgs $UpdateAsset.Asset.Name, $UpdatedAt
         $UpdateAsset
-    })
+    }
 }
 
 function Save-Asset {
     param ([Parameter(Mandatory)] [UpdateAsset[]]$UpdateAssets)
 
     $null = Remove-DownloadDirectory
-    return @(foreach ($UpdateAsset in $UpdateAssets) {
+    foreach ($UpdateAsset in $UpdateAssets) {
         $null = New-Item -ItemType Directory -Path $UpdateAsset.AppDownloadDirectory -Force
         Write-UiMessage -UiKey "DownloadItem" -FormatArgs $UpdateAsset.App.Name, $UpdateAsset.Asset.Name -NoNewline
         $CurlErrorMessage = & $CurlExecutablePath @CurlOptions --output $UpdateAsset.DownloadFilePath $UpdateAsset.Asset.DownloadUrl
@@ -360,13 +360,13 @@ function Save-Asset {
         }
         Write-UiMessage -UiKey "StatusOk"
         $UpdateAsset
-    })
+    }
 }
 
 function Select-VerifiedAsset {
     param ([Parameter(Mandatory)] [UpdateAsset[]]$UpdateAssets)
 
-    return @(foreach ($UpdateAsset in $UpdateAssets) {
+    foreach ($UpdateAsset in $UpdateAssets) {
         Write-UiMessage -UiKey "VerifyItem" -FormatArgs $UpdateAsset.App.Name, $UpdateAsset.Asset.Name
         $FileHash = Get-FileHash -LiteralPath $UpdateAsset.DownloadFilePath -Algorithm SHA256
         $CalculatedDigest = "sha256:$($FileHash.Hash.ToLower())"
@@ -380,13 +380,13 @@ function Select-VerifiedAsset {
             continue
         }
         $UpdateAsset
-    })
+    }
 }
 
 function Expand-AssetArchive {
     param ([Parameter(Mandatory)] [UpdateAsset[]]$UpdateAssets)
 
-    return @(foreach ($UpdateAsset in $UpdateAssets) {
+    foreach ($UpdateAsset in $UpdateAssets) {
         if ($UpdateAsset.Type -eq [AssetType]::Archive) {
             Write-UiMessage -UiKey "ExtractItem" -FormatArgs $UpdateAsset.App.Name, $UpdateAsset.Asset.Name -NoNewline
             $null = New-Item -ItemType Directory -Path $UpdateAsset.ExtractDirectory -Force
@@ -398,7 +398,7 @@ function Expand-AssetArchive {
             Write-UiMessage -UiKey "StatusOk"
         }
         $UpdateAsset
-    })
+    }
 }
 
 function Remove-InstalledContent {
