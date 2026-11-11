@@ -287,30 +287,34 @@ function Select-CandidateAsset {
     )
 
     foreach ($App in $Apps) {
-        $MatchedAssets = @(foreach ($Target in $App.UpdateTargets) {
-            if ([string]::IsNullOrWhiteSpace($Target.AssetFilter)) {
-                Write-UiMessage -UiKey "EmptyAssetFilter" -FormatArgs $Target.Repository, $App.Name
-                continue
+        $MatchedAssets = @(
+            foreach ($Target in $App.UpdateTargets) {
+                if ([string]::IsNullOrWhiteSpace($Target.AssetFilter)) {
+                    Write-UiMessage -UiKey "EmptyAssetFilter" -FormatArgs $Target.Repository, $App.Name
+                    continue
+                }
+                if ([string]::IsNullOrWhiteSpace($Target.Tag)) {
+                    Write-UiMessage -UiKey "EmptyReleaseTag" -FormatArgs $Target.Repository, $App.Name
+                    continue
+                }
+                $Release = $Releases | Where-Object {
+                    $_.Repository -eq $Target.Repository -and $_.Tag -eq $Target.Tag
+                }
+                if ($null -eq $Release) { continue }
+                $TargetAssets = @(
+                    foreach ($Asset in $Release.Assets) {
+                        if ($Asset.Name -notlike $Target.FilterPattern) { continue }
+                        $Type = Get-AssetType -AssetName $Asset.Name
+                        if ($null -eq $Type) { continue }
+                        [UpdateAsset]::new($App, $Target, $Asset, $Type, $DownloadDirectory)
+                    }
+                )
+                if ($TargetAssets.Count -eq 0) {
+                    Write-UiMessage -UiKey "NoTargetAsset" -FormatArgs $Target.Repository, $Target.AssetFilter
+                }
+                $TargetAssets
             }
-            if ([string]::IsNullOrWhiteSpace($Target.Tag)) {
-                Write-UiMessage -UiKey "EmptyReleaseTag" -FormatArgs $Target.Repository, $App.Name
-                continue
-            }
-            $Release = $Releases | Where-Object {
-                $_.Repository -eq $Target.Repository -and $_.Tag -eq $Target.Tag
-            }
-            if ($null -eq $Release) { continue }
-            $TargetAssets = @(foreach ($Asset in $Release.Assets) {
-                if ($Asset.Name -notlike $Target.FilterPattern) { continue }
-                $Type = Get-AssetType -AssetName $Asset.Name
-                if ($null -eq $Type) { continue }
-                [UpdateAsset]::new($App, $Target, $Asset, $Type, $DownloadDirectory)
-            })
-            if ($TargetAssets.Count -eq 0) {
-                Write-UiMessage -UiKey "NoTargetAsset" -FormatArgs $Target.Repository, $Target.AssetFilter
-            }
-            $TargetAssets
-        })
+        )
         if ($MatchedAssets.Count -eq 0) { continue }
         $PreferredAssets = @($MatchedAssets | Where-Object { $_.Target.Preferred })
         $EligibleAssets = if ($PreferredAssets.Count -gt 0) { $PreferredAssets } else { $MatchedAssets }
@@ -454,9 +458,11 @@ function Install-ExtractedContent {
     $InstallFilters = $UpdateAsset.App.InstallFilters
     if ($InstallFilters.Count -gt 0) {
         $MovedUiKey = "MovedFiltered"
-        $InstallItems = @(foreach ($InstallFilter in $InstallFilters) {
-            Get-ChildItem -LiteralPath $InstallSourceDirectory -Filter $InstallFilter
-        })
+        $InstallItems = @(
+            foreach ($InstallFilter in $InstallFilters) {
+                Get-ChildItem -LiteralPath $InstallSourceDirectory -Filter $InstallFilter
+            }
+        )
     } else {
         $MovedUiKey = "MovedFullStructure"
         $InstallItems = @(Get-ChildItem -LiteralPath $InstallSourceDirectory)
@@ -555,11 +561,13 @@ function Invoke-Update {
     if ($AppProcesses.Count -gt 0) {
         Stop-AppProcess -AppProcesses $AppProcesses
     }
-    $ReleaseTargets = @($Apps.UpdateTargets |
-        Where-Object {
-            -not [string]::IsNullOrWhiteSpace($_.Repository) -and -not [string]::IsNullOrWhiteSpace($_.Tag)
-        } |
-        Sort-Object -Property Repository, Tag -Unique)
+    $ReleaseTargets = @(
+        $Apps.UpdateTargets |
+            Where-Object {
+                -not [string]::IsNullOrWhiteSpace($_.Repository) -and -not [string]::IsNullOrWhiteSpace($_.Tag)
+            } |
+            Sort-Object -Property Repository, Tag -Unique
+    )
     if ($ReleaseTargets.Count -eq 0) { throw [UpdateException]::new("NoUpdateTargets") }
 
     Write-UiMessage -UiKey "StepFetchMetadata"
@@ -627,9 +635,11 @@ $DownloadDirectory = Join-Path -Path $UpdateDirectory -ChildPath "download"
 $CurlExecutablePath = Join-Path -Path $env:SystemRoot -ChildPath "System32\curl.exe"
 $CurlOptions = @("--silent", "--show-error", "--location", "--proto", "=https", "--fail", "--stderr", "-")
 $TarExecutablePath = Join-Path -Path $env:SystemRoot -ChildPath "System32\tar.exe"
-$AppCacheDirectories = @(foreach ($Directory in $Settings.AppCache.Directories) {
-    Resolve-ConfiguredPath -Path $Directory
-})
+$AppCacheDirectories = @(
+    foreach ($Directory in $Settings.AppCache.Directories) {
+        Resolve-ConfiguredPath -Path $Directory
+    }
+)
 $ErrorActionPreference = $Settings.ErrorActionPreference
 $ProgressPreference = $Settings.ProgressPreference
 
