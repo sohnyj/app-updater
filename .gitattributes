@@ -1,1 +1,4 @@
 * text eol=crlf
+/.gitattributes export-ignore
+/.github export-ignore
+/PSScriptAnalyzerSettings.psd1 export-ignore
