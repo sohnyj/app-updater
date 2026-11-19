@@ -122,3 +122,7 @@ One asset is installed per app: the most recently updated asset among the matche
 | `StartMenu.Script` | Script file name, resolved beside the updater |
 | `ErrorActionPreference` | PowerShell error handling (`Continue` / `Stop`) |
 | `ProgressPreference` | PowerShell progress bar visibility for the metadata request (`SilentlyContinue` to hide) |
+
+## License
+
+Licensed under the GNU General Public License v3.0 or later.
