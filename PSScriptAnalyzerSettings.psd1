@@ -51,15 +51,16 @@
             Enable = $true
         }
 
-        # Compatibility: Windows PowerShell 5.1
+        # Compatibility: PowerShell 7.6 on Windows
         PSUseCompatibleSyntax      = @{
             Enable         = $true
-            TargetVersions = @('5.1')
+            TargetVersions = @('7.6')
         }
 
+        # No 7.6 profile ships with PSScriptAnalyzer; 7.0 is the newest Windows profile.
         PSUseCompatibleCommands    = @{
             Enable         = $true
-            TargetProfiles = @('win-48_x64_10.0.17763.0_5.1.17763.316_x64_4.0.30319.42000_framework')
+            TargetProfiles = @('win-8_x64_10.0.17763.0_7.0.0_x64_3.1.2_core')
         }
     }
 }

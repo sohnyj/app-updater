@@ -1,4 +1,4 @@
-# Usage: powershell.exe -ExecutionPolicy Bypass -File .\startmenu.ps1
+# Usage: pwsh.exe -ExecutionPolicy Bypass -File .\startmenu.ps1
 
 $BaseDirectory = Join-Path -Path $env:LOCALAPPDATA -ChildPath "mpv"
 $ExecutablePath = Join-Path -Path $BaseDirectory -ChildPath "mpv.exe"

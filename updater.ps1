@@ -1,4 +1,4 @@
-#Requires -Version 5.1
+#Requires -Version 7.6
 
 # Data Model
 enum AssetType {
@@ -18,11 +18,8 @@ class UpdateTarget {
         $this.Repository = $Definition.Repository
         $this.Tag = $Definition.Tag
         $this.AssetFilter = $Definition.AssetFilter
-        $this.FilterPattern = if ([WildcardPattern]::ContainsWildcardCharacters($this.AssetFilter)) {
-            $this.AssetFilter
-        } else {
-            "*$($this.AssetFilter)*"
-        }
+        $HasWildcard = [WildcardPattern]::ContainsWildcardCharacters($this.AssetFilter)
+        $this.FilterPattern = $HasWildcard ? $this.AssetFilter : "*$($this.AssetFilter)*"
         $this.Preferred = $Definition.Preferred
         $this.Force = $Definition.Force
     }
@@ -54,11 +51,7 @@ class Asset {
         $this.Name = $ApiAsset.name
         $this.DownloadUrl = $ApiAsset.browser_download_url
         $this.Digest = $ApiAsset.digest
-        $this.UpdatedAt = [DateTime]::Parse(
-            $ApiAsset.updated_at,
-            [System.Globalization.CultureInfo]::InvariantCulture,
-            [System.Globalization.DateTimeStyles]::AssumeUniversal
-        ).ToLocalTime()
+        $this.UpdatedAt = $ApiAsset.updated_at.ToLocalTime()
     }
 }
 
@@ -133,7 +126,7 @@ function Import-JsonFile {
         throw "Not found: $FilePath"
     }
     try {
-        return Get-Content -LiteralPath $FilePath -Raw -Encoding UTF8 -ErrorAction Stop | ConvertFrom-Json
+        return Get-Content -LiteralPath $FilePath -Raw -ErrorAction Stop | ConvertFrom-Json
     } catch {
         throw "Failed to parse: $FilePath ($($_.Exception.Message))"
     }
@@ -143,10 +136,7 @@ function Resolve-ConfiguredPath {
     param ([Parameter(Mandatory)] [string]$Path)
 
     $ExpandedPath = [System.IO.Path]::GetFullPath([Environment]::ExpandEnvironmentVariables($Path))
-    $RootPath = [System.IO.Path]::GetPathRoot($ExpandedPath)
-    if ($ExpandedPath.Length -le $RootPath.Length) { return $ExpandedPath }
-    $Separators = [System.IO.Path]::DirectorySeparatorChar, [System.IO.Path]::AltDirectorySeparatorChar
-    return $ExpandedPath.TrimEnd($Separators)
+    return [System.IO.Path]::TrimEndingDirectorySeparator($ExpandedPath)
 }
 
 # Console
@@ -168,16 +158,11 @@ function Write-UiMessage {
 function Exit-Script {
     param ([switch]$Fail)
 
-    $ExitSound = [System.Media.SystemSounds]::Asterisk
-    $ExitCode = 0
-    if ($Fail) {
-        $ExitSound = [System.Media.SystemSounds]::Hand
-        $ExitCode = 1
-    }
+    $ExitSound = $Fail ? [System.Media.SystemSounds]::Hand : [System.Media.SystemSounds]::Asterisk
     $ExitSound.Play()
     Write-UiMessage -UiKey "PressEnterExit"
     $null = Read-Host
-    exit $ExitCode
+    exit ($Fail ? 1 : 0)
 }
 
 # Pipeline
@@ -250,13 +235,11 @@ function Get-Release {
             } else {
                 $Settings.Api.TagEndpoint -f $Target.Repository, [Uri]::EscapeDataString($Target.Tag)
             }
+            # -TimeoutSec aliases -ConnectionTimeoutSeconds (7.4+), which the 7.0 lint profile does not know.
             $ApiRelease = Invoke-RestMethod -Uri $ApiEndpointUri -TimeoutSec $Settings.Api.TimeoutSeconds -Headers $RequestHeaders
             [Release]::new($Target.Repository, $Target.Tag, $ApiRelease)
         } catch {
-            $StatusCode = 0
-            if ($_.Exception.Response) {
-                $StatusCode = [int]$_.Exception.Response.StatusCode
-            }
+            $StatusCode = [int]$_.Exception.Response?.StatusCode
             if ($StatusCode -eq 401) {
                 throw [UpdateException]::new("ApiTokenFail")
             }
@@ -317,8 +300,8 @@ function Select-CandidateAsset {
         )
         if ($MatchedAssets.Count -eq 0) { continue }
         $PreferredAssets = @($MatchedAssets | Where-Object { $_.Target.Preferred })
-        $EligibleAssets = if ($PreferredAssets.Count -gt 0) { $PreferredAssets } else { $MatchedAssets }
-        $EligibleAssets | Sort-Object -Property { $_.Asset.UpdatedAt } -Descending | Select-Object -First 1
+        $EligibleAssets = $PreferredAssets.Count -gt 0 ? $PreferredAssets : $MatchedAssets
+        $EligibleAssets | Sort-Object -Property { $_.Asset.UpdatedAt } -Descending -Top 1
     }
 }
 
@@ -417,7 +400,7 @@ function Remove-InstalledContent {
     $FailureCount = 0
     foreach ($InstalledItem in $InstalledItems) {
         $ItemPath = $InstalledItem.FullName
-        $RelativePath = $ItemPath.Substring($BaseDirectory.Length + 1)
+        $RelativePath = [System.IO.Path]::GetRelativePath($BaseDirectory, $ItemPath)
         if ($ItemPath -eq $UpdateDirectory -or (Test-ExcludedName -Name $InstalledItem.Name)) {
             Write-UiMessage -UiKey "SkipExcluded" -FormatArgs $RelativePath
             continue
@@ -449,11 +432,9 @@ function Install-Executable {
 function Install-ExtractedContent {
     param ([Parameter(Mandatory)] [UpdateAsset]$UpdateAsset)
 
-    $InstallSourceDirectory = $UpdateAsset.ExtractDirectory
-    $ExtractedItems = @(Get-ChildItem -LiteralPath $InstallSourceDirectory)
-    if ($ExtractedItems.Count -eq 1 -and $ExtractedItems[0].PSIsContainer) {
-        $InstallSourceDirectory = $ExtractedItems[0].FullName
-    }
+    $ExtractedItems = @(Get-ChildItem -LiteralPath $UpdateAsset.ExtractDirectory)
+    $HasSingleRoot = $ExtractedItems.Count -eq 1 -and $ExtractedItems[0].PSIsContainer
+    $InstallSourceDirectory = $HasSingleRoot ? $ExtractedItems[0].FullName : $UpdateAsset.ExtractDirectory
 
     $InstallFilters = $UpdateAsset.App.InstallFilters
     if ($InstallFilters.Count -gt 0) {

@@ -6,8 +6,8 @@ Updates local apps from GitHub Releases. Configured through `settings.json`.
 
 ## Requirements
 
-- PowerShell 5.1+ (built-in on Windows 10+)
-- `curl.exe` and `tar.exe` (built-in on Windows 10 1803+)
+- PowerShell 7.6+ (built-in on Windows 11)
+- `curl.exe` and `tar.exe` (built-in on Windows 11)
 
 ## Installation
 
@@ -16,14 +16,14 @@ Updates local apps from GitHub Releases. Configured through `settings.json`.
 
 ## shortcut.ps1
 
-Creates `update.lnk` in `BaseDirectory`, launching `updater.ps1` via `powershell.exe -ExecutionPolicy Bypass`.
+Creates `update.lnk` in `BaseDirectory`, launching `updater.ps1` via `pwsh.exe -ExecutionPolicy Bypass`.
 
 Windows blocks `.ps1` on double-click; the shortcut works around it.
 
 **Usage:**
 
 ```powershell
-powershell.exe -ExecutionPolicy Bypass -File .\shortcut.ps1
+pwsh.exe -ExecutionPolicy Bypass -File .\shortcut.ps1
 ```
 
 Run once, then double-click `update.lnk`.
@@ -121,7 +121,7 @@ One asset is installed per app: the most recently updated asset among the matche
 | `StartMenu.Create` | Run the Start Menu script after a successful update |
 | `StartMenu.Script` | Script file name, resolved beside the updater |
 | `ErrorActionPreference` | PowerShell error handling (`Continue` / `Stop`) |
-| `ProgressPreference` | PowerShell progress bar visibility for the metadata request (`SilentlyContinue` to hide) |
+| `ProgressPreference` | PowerShell progress bar visibility for the whole script (`SilentlyContinue` to hide) |
 
 ## License
 
